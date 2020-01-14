@@ -21,21 +21,77 @@ add_upacc <- function(conmat){
 }
 
 
+#' @title Asses accuracy and estimate area according to Olofsson.
+#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
+#' @description Compute the accuracy normalized by the area. Note that, these 
+#'              computations don't work on clustered sampling.
+#'
+#' @param confusion_matrix A matrix given in sample counts. Columns represent 
+#'                         the reference data and rows the results of the 
+#'                         classification.
+#' @param label_areas      A named vector of the total area of each label on the 
+#'                         map.
+#' @return                 A tibble of the label areas, their inferior and 
+#'                         superior 95% confidence interval, and the 
+#'                         area-adjusted overall, user, and producer accuracies.
+#' @export
+asses_accuracy_area <- function(confusion_matrix, label_areas){
+    
+    stopifnot(length(colnames(confusion_matrix)) > 0 && length(rownames(confusion_matrix)) > 0)
+    stopifnot(sum(colnames(confusion_matrix) == rownames(confusion_matrix)) == length(colnames(confusion_matrix))) # the order of columns and rows do not match
+    stopifnot(all(colnames(confusion_matrix) %in% names(label_areas))) # do names match?
+    stopifnot(all(names(label_areas) %in% colnames(confusion_matrix))) # do names match?
+    label_areas <- label_areas[colnames(confusion_matrix)] # re-order elements
+    stopifnot(all(colnames(confusion_matrix) == names(label_areas))) # do names' positions match?
+    
+    W <- label_areas/sum(label_areas)
+    #W.mat <- matrix(rep(W, times = ncol(confusion_matrix)), ncol = ncol(confusion_matrix))
+    n <- rowSums(confusion_matrix)
+    n.mat <- matrix(rep(n, times = ncol(confusion_matrix)), ncol = ncol(confusion_matrix))
+    p <- W * confusion_matrix / n.mat                                             # estimated area proportions
+    # rowSums(p) * sum(label_areas)                                               # class areas according to the map, that is, the label_areas vector
+    error_adjusted_area_estimate <- colSums(p) * sum(label_areas)                 # class areas according to the reference data
+    Sphat_1 <- vapply(1:ncol(confusion_matrix), function(i){                      # S(phat_1) - The standard error of the area estimative is given as a function area proportions and sample counts
+        sqrt(sum(W^2 * confusion_matrix[, i]/n * (1 - confusion_matrix[, i]/n)/(n - 1)))
+    }, numeric(1))
+    #
+    SAhat <- sum(label_areas) * Sphat_1                                           # S(Ahat_1) - Standard error of the area estimate
+    Ahat_sup <- error_adjusted_area_estimate + 2 * SAhat                          # Ahat_1 - 95% superior confidence interval
+    Ahat_inf <- error_adjusted_area_estimate - 2 * SAhat                          # Ahat_1 - 95% inferior confidence interval
+    Ohat <- sum(diag(p))                                                          # Ohat   - Overall accuracy
+    Uhat <- diag(p) / rowSums(p)                                                  # Uhat_i - User accuracy
+    Phat <- diag(p) / colSums(p)                                                  # Phat_i - Producer accuracy
+    #
+    value <- NULL   
+    label_areas %>% 
+        names() %>% 
+        tibble::enframe(name = NULL) %>% 
+        dplyr::rename(label = value) %>% 
+        dplyr::mutate(area = label_areas,
+                      a_conf95_inf = Ahat_inf,
+                      a_conf95_sup = Ahat_sup,
+                      overall  = Ohat,
+                      user     = Uhat,
+                      producer = Phat) %>% 
+        return()
+}
+
+
 #' @title Asses accuracy.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Compute the overall, user, and producer accuracies.
 #'
 #' @param confusion_matrix A matrix given in sample counts. Columns represent the reference data and rows the results of the classification.
-#' @return                 A list of numeric vectors: The overall, user and producer accuracies.
+#' @return                 A tibble with the f1 score along the overall, user, and producer accuracies.
 asses_accuracy_simple <- function(confusion_matrix){
-    overall <- sum(diag(confusion_matrix))/sum(confusion_matrix)
-    acc_user <- diag(confusion_matrix)/rowSums(confusion_matrix)
-    acc_prod <- diag(confusion_matrix)/colSums(confusion_matrix)
-    f1_score <- f1_score(confusion_matrix)$f1_score
-    names(acc_user) <- colnames(confusion_matrix)
-    names(acc_prod) <- rownames(confusion_matrix)
-    return(list(overall = overall, user = acc_user, producer = acc_prod, 
-                f1_score = f1_score))
+    overall <- producer <- user <- f1_score <- NULL
+    confusion_matrix %>% 
+        compute_f1() %>% 
+        dplyr::mutate(overall  = sum(diag(confusion_matrix))/sum(confusion_matrix),
+                      producer = diag(confusion_matrix)/colSums(confusion_matrix),
+                      user = diag(confusion_matrix)/rowSums(confusion_matrix)) %>% 
+        dplyr::select(label, f1_score, overall, user, producer) %>% 
+        return()
 }
 
 
@@ -45,7 +101,7 @@ asses_accuracy_simple <- function(confusion_matrix){
 #'
 #' @param confusion_matrix A matrix given in sample counts. Columns represent the reference data and rows the results of the classification.
 #' @return                 A tibble with precision, recall and f1 score.
-f1_score <- function(confusion_matrix){
+compute_f1 <- function(confusion_matrix){
     # cm <- matrix(c(24, 2,  1, 3, 30,  4, 0,  5, 31), byrow = TRUE, ncol = 3)
     # f1_score(cm)
     # precision recall    f1
@@ -56,7 +112,7 @@ f1_score <- function(confusion_matrix){
     precision <- diag(confusion_matrix)/colSums(confusion_matrix)
     recall    <- diag(confusion_matrix)/rowSums(confusion_matrix)
     f1_score <- 2 * precision * recall/(precision + recall) 
-    return(tibble::tibble(precision, recall, f1_score))
+    return(tibble::tibble(label = names(f1_score), precision, recall, f1_score))
 }
 
 
@@ -138,6 +194,57 @@ format_accuracy <- function(.data, suffix){
 }
 
 
+#' @title Compute and format confusion matrices.
+#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
+#' @description Compute and format the confusion matrix of each detector.
+#'
+#' @param .data A tibble with tile, image date, fmask4, maja, s2cloudless, and sen2cor.
+#' @return      A tibble.
+format_conmat <- function(.data){
+    expert <- fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
+    
+    #helper <- function(detector, .data){
+    #    .data %>% 
+    #        get_confusion_matrix(prediction_var = eval(rlang::sym(detector)), 
+    #                             reference_var = expert) %>%  
+    #        magrittr::extract2("table") %>% 
+    #        asses_accuracy_simple() %>% 
+    #        return()
+    #}
+    #c("fmask4", "maja", "s2cloudless", "sen2cor") %>% 
+    #    tibble::enframe(name = NULL) %>% 
+    #    dplyr::rename(detector = value) %>% 
+    #    dplyr::mutate(accuracy_tb =  purrr::map(detector, helper, .data = .data))
+    
+    fmask4_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = fmask4, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_simple() %>% 
+        magrittr::set_names(c(names(.)[1], paste0("fmask4_", names(.)[-1])))
+    maja_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = maja, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_simple() %>% 
+        magrittr::set_names(c(names(.)[1], paste0("maja_", names(.)[-1])))
+    s2cloud_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = s2cloudless, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_simple() %>% 
+        magrittr::set_names(c(names(.)[1], paste0("s2cloudless_", names(.)[-1])))
+    sen2cor_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = sen2cor, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_simple() %>% 
+        magrittr::set_names(c(names(.)[1], paste0("sen2cor_", names(.)[-1])))
+
+    fmask4_acc %>% 
+        dplyr::left_join(maja_acc, by = "label") %>% 
+        dplyr::left_join(s2cloud_acc, by = "label") %>% 
+        dplyr::left_join(sen2cor_acc, by = "label") %>% 
+    return()
+}
+
+
 #' @title Format a tibble of frequencies of a cloud detection algorithm.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Save an object as a latex table in latex format.
@@ -163,7 +270,7 @@ format_freq <- function(.data, detector) {
 #' @return       A tibble with the reference data in the columns and the test in the rows.
 #'               The last row and column have the producer and user accuracies respectively.
 #'               The overall accuracy is in the last diagonal cell.
-get_accuracy <- function(.data, detector){
+.get_accuracy <- function(.data, detector){
     expert <- NULL
     detector <- rlang::enquo(detector)
     res <- .data %>%
@@ -432,6 +539,43 @@ multiplot <- function(..., plotlist = NULL, file, cols = 1, layout = NULL) {
                                             layout.pos.col = matchidx$col))
         }
     }
+}
+
+
+#' @title Format the plots of pixels' class per image.
+#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
+#' @description Format the plots of pixels' class per image.
+#'
+#' @param .data A tibble with images' tiles, dates, labels, number of pixels per 
+#'              label, and cloud detector algorithm (tile, img_date, label, 
+#'              total, detector).
+#' @return      A plot object.
+plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE, 
+                              ylabel = FALSE, only_legend = FALSE){
+    detector <- img_date <- tile <- total <- NULL
+    res <- .data %>% 
+        ggplot2::ggplot() + 
+        ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date, y = total, 
+                                                 fill = label), 
+                          #position = "stack", 
+                          position = "dodge", 
+                          stat = "identity") +
+        ggplot2::facet_wrap(dplyr::vars(tile, detector), ncol = 1) +
+        ggplot2::theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
+        ggplot2::xlab("Image date.") +
+        ggplot2::ylab("Number of pixels.") 
+    if (only_legend) 
+        return(ggpubr::as_ggplot(ggpubr::get_legend(res)))
+    if (!ylabel) {
+        res <- res + ggplot2::theme(axis.title.y = element_blank(), 
+                                    axis.text.y  = element_blank(),
+                                    axis.ticks.y = element_blank())
+    }
+    if (!xlabel)
+        res <- res + ggplot2::theme(axis.title.x = element_blank())
+    if (!legend) 
+        res <- res + ggplot2::theme(legend.position = "none")
+    return(res)
 }
 
 
@@ -811,7 +955,10 @@ table_to_latex <- function(obj, out_file, caption_msg) {
             # NOTE: It MUST match the recoding values!
             label_vector <- c("cirrus", "cloud", "fora", "nao nuvem", 
                               "nao_nuvem", "não nuvem", "nuvem", "nï¿½o nuvem",
-                              "shadow_new", "sombra", "sombra_nuvem") %>% 
+                              
+                              
+                              "nÃ£o nuvem", 
+                              "Nuvem", "shadow_new", "sombra", "sombra_nuvem") %>% 
                 sort()
             user_vector <- sort(unique(dplyr::pull(samples_sf, !!coded_var))) 
             # Report any missing label in the data provided by the experts.
@@ -829,7 +976,9 @@ table_to_latex <- function(obj, out_file, caption_msg) {
                                                "nao_nuvem"    = "clear",
                                                "não nuvem"    = "clear",
                                                "nï¿½o nuvem"  = "clear",
+                                               "nÃ£o nuvem"   = "clear",
                                                "nuvem"        = "cloud",
+                                               "Nuvem"        = "cloud",
                                                "shadow_new"   = "shadow",
                                                "sombra"       = "shadow",
                                                "sombra_nuvem" = "shadow",
