@@ -41,7 +41,7 @@ sentinel2landsat <- match_scenes2tiles(tile_path = sentinel_tiles,
 
 #---- Read cloud masks -----
 
-dir_name <- img_date <- NULL
+baseline <- dir_name <- file_path <- img_date <- level <- processing <- NULL
 
 fm4_s2cloud_tb <- base_path %>%
     file.path("data", "fmask4_s2cloudless") %>%
@@ -111,7 +111,7 @@ s2core_maja_tb %>%
 
 
 #---- Join FAMSK4 & S2 CLOUDLESS to MAJA & SEN2COR ----
-
+mission <- orbit <- tile <- fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
 fm4_s2cloud_maja_s2cor_tb <- fm4_s2cloud_tb %>% 
     dplyr::full_join(s2core_maja_tb, by = c("mission", "img_date", "tile", "orbit")) %>%
     dplyr::select(mission, orbit ,tile, img_date, fmask4, maja, sen2cor, s2cloudless) %>%
@@ -152,21 +152,27 @@ cloud_mask_tb <- fm4_s2cloud_maja_s2cor_tb %>%
                   s2cloudless_r = purrr::map(s2cloudless,  raster::raster)) %>%
     dplyr::select(-c(fmask4, maja, sen2cor, s2cloudless))
 
-
-# Images selected for sampling.
+expert <- NULL
 cloud_imgs <- cloud_imgs %>%
-    dplyr::mutate(expert = dplyr::case_when(mission == "S2A" & tile =="T19LFK" &  
-                                                img_date %in% c("20170102T144722", "20180527T144731", "20181103T144731") ~"Anderson",
-                                            mission == "S2A" & tile =="T21LXH" &  
-                                                img_date %in% c("20170616T140051", "20170706T140051", "20181009T140051") ~"Michel",
-                                            mission == "S2A" & tile =="T22MCA" &  
-                                                img_date %in% c("20170603T135111", "20180419T135111", "20180628T135111") ~"Michelle",
+    # Images selected for sampling.
+    # TODO: The experts classified points, not images. Move this to some other place.
+    dplyr::mutate(expert = dplyr::case_when(mission == "S2A" & tile =="T19LFK" & img_date == "20170102T144722" ~ "Anderson",
                                             mission == "S2A" & tile =="T19LFK" & img_date == "20180507T144731" ~ "Suli",
+                                            mission == "S2A" & tile =="T19LFK" & img_date == "20180527T144731" ~ "Anderson",
+                                            mission == "S2A" & tile =="T19LFK" & img_date == "20181103T144731" ~ "Anderson",
+                                            mission == "S2A" & tile =="T21LXH" & img_date == "20170328T140051" ~ "Suli",
+                                            mission == "S2A" & tile =="T21LXH" & img_date == "20170616T140051" ~ "Michel",
+                                            mission == "S2A" & tile =="T21LXH" & img_date == "20170706T140051" ~ "Michel",
+                                            mission == "S2A" & tile =="T21LXH" & img_date == "20180611T140051" ~ "Suli",
                                             mission == "S2A" & tile =="T21LXH" & img_date == "20180621T140051" ~ "Suli",
-                                            mission == "S2A" & tile =="T22MCA" & img_date == "20170623T135111" ~ "Suli")) %>%
+                                            mission == "S2A" & tile =="T21LXH" & img_date == "20180919T140051" ~ "Suli",
+                                            mission == "S2A" & tile =="T21LXH" & img_date == "20181009T140051" ~ "Michel",
+                                            mission == "S2A" & tile =="T22MCA" & img_date == "20170603T135111" ~ "Michelle",
+                                            mission == "S2A" & tile =="T22MCA" & img_date == "20170623T135111" ~ "Suli",
+                                            mission == "S2A" & tile =="T22MCA" & img_date == "20180419T135111" ~ "Michelle",
+                                            mission == "S2A" & tile =="T22MCA" & img_date == "20180628T135111" ~ "Michelle")) %>%
     dplyr::select(mission, orbit, tile, img_date, expert, fmask4, maja, sen2cor, s2cloudless) %>%
     print(n = Inf)
-
 
 ```
 
@@ -176,9 +182,8 @@ cloud_imgs <- cloud_imgs %>%
 
 ```{r get_data_masks}
 
-file_name <- file_path <- NULL
-
 #---- Urban mask. ----
+file_name <- NULL
 urban_tb <- base_path %>%
     file.path("data", "masks", "urban", "tiled") %>%
     list.files(pattern = "[.]tif$", full.names = TRUE) %>%
@@ -222,7 +227,6 @@ prodes_tb <- base_path %>%
 
 #---- Shapefiles of clouds. ----
 
-
 # Read the sample point classified by experts.
 cloud_experts <- base_path %>%
     file.path("data", "samples", "point") %>%
@@ -233,6 +237,9 @@ cloud_experts <- base_path %>%
     dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path))) %>%
     tidyr::separate(col = file_name, into = c("mission", "level", "tile", NA, 
                                               "img_date")) %>%
+    dplyr::filter((mission == "S2A" & tile == "T19LFK" & img_date %in% c("20161004T144732", "20170102T144722", "20180507T144731", "20181103T144731")) |
+                  (mission == "S2A" & tile == "T21LXH" & img_date %in% c("20170328T140051", "20180611T140051", "20180919T140051", "20181009T140051")) | 
+                  (mission == "S2A" & tile == "T22MCA" & img_date %in% c("20170603T135111", "20170623T135111", "20180419T135111", "20180628T135111"))) %>% 
     dplyr::mutate(samples_sf = purrr::map(file_path, read_samples),
                   n_samples = purrr::map_int(samples_sf, nrow),
                   srs = purrr::map(samples_sf, sf::st_crs)) %>%
@@ -279,6 +286,8 @@ recode_vec <- c("cirrus" = "cloud",
                 "cloud"  = "cloud", 
                 "shadow" = "shadow")
 
+FID <- samples_sf <- samples_tb <- NULL
+prodes <- water <- urban <- NULL
 data_tb <- cloud_experts %>%
     dplyr::select(mission, level, tile, img_date, samples_sf) %>%
     dplyr::mutate(samples_tb = purrr::map(samples_sf, sf::st_set_geometry, 
@@ -304,14 +313,19 @@ data_tb <- cloud_experts %>%
 
 ```{r plot_images}
 
+fmask4_freq <- maja_freq <- s2cloudless_freq <- sen2cor_freq <- NULL
 img_freq <- cloud_experts %>%
     dplyr::select(tile, img_date, fmask4 = fmask4_freq, maja = maja_freq, 
                   s2cloud = s2cloudless_freq, sen2cor = sen2cor_freq)
 
 fmask4_img_freq  <- img_freq %>% format_freq(fmask4)
 sen2cor_img_freq <- img_freq %>% format_freq(sen2cor)
-maja_img_freq    <- img_freq %>% format_freq(maja) %>% dplyr::mutate(total = total/4) # compensate for images' spatial resolutions
-s2cloud_img_freq <- img_freq %>% format_freq(s2cloud) %>% dplyr::mutate(total = total * 9) # compensate for images' spatial resolutions
+maja_img_freq    <- img_freq %>% 
+    format_freq(maja) %>% 
+    dplyr::mutate(total = total/4) # compensate for images' spatial resolutions
+s2cloud_img_freq <- img_freq %>% 
+    format_freq(s2cloud) %>% 
+    dplyr::mutate(total = total * 9) # compensate for images' spatial resolutions
 
 img_freq <- dplyr::bind_rows(fmask4_img_freq, maja_img_freq, 
                              s2cloud_img_freq, sen2cor_img_freq)
@@ -326,47 +340,10 @@ plot_tb <- img_freq %>%
                                         "clear"  = "2_clear",
                                         "shadow" = "3_shadow"))
 
-#' @title Format the plots of pixels' class per image.
-#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description Format the plots of pixels' class per image.
-#'
-#' @param .data A tibble with images' tiles, dates, labels, number of pixels per 
-#'              label, and cloud detector algorithm (tile, img_date, label, 
-#'              total, detector).
-#' @return      A plot object.
-plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE, 
-                              ylabel = FALSE, only_legend = FALSE){
-    total <- NULL
-    res <- .data %>% 
-        ggplot2::ggplot() + 
-        ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date, y = total, 
-                                                 fill = label), 
-                          #position = "stack", 
-                          position = "dodge", 
-                          stat = "identity") +
-        ggplot2::facet_wrap(dplyr::vars(tile, detector), ncol = 1) +
-        ggplot2::theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
-        ggplot2::xlab("Image date.") +
-        ggplot2::ylab("Number of pixels.") 
-    if (only_legend) 
-        return(ggpubr::as_ggplot(ggpubr::get_legend(res)))
-    if (!ylabel) {
-        res <- res + ggplot2::theme(axis.title.y = element_blank(), 
-                                    axis.text.y  = element_blank(),
-                                    axis.ticks.y = element_blank())
-    }
-    if (!xlabel)
-        res <- res + ggplot2::theme(axis.title.x = element_blank())
-    if (!legend) 
-        res <- res + ggplot2::theme(legend.position = "none")
-    return(res)
-}
-
-
 #---- Plot images using historgram ----
 png(width = 960, height = 960, pointsize = 24, 
     filename = file.path(base_path, "tex", "images", 
-                         "pixels_by_detector_v2.png"))
+                         "pixels_by_detector_v3.png"))
 # Get the tiles and properties for each plot,
 img_freq %>%
     dplyr::pull(tile) %>%
@@ -402,7 +379,6 @@ img_freq %>%
     dplyr::pull(tile_plot) %>% 
     {multiplot(plotlist = ., file = "deleteme", cols = 4, 
                layout = matrix(c(1, 1, 2, 2, 3, 3, 4), nrow = 1, byrow = TRUE))}
-
 dev.off()
 
 ```
@@ -411,30 +387,8 @@ dev.off()
 
 ```{r print_img_accuracy}
 
-FID <- level <- mission <- prodes <- samples_sf <- samples_tb <- tile <- urban <- water <- NULL
-
-format_conmat <- function(.data){
-    fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
-    fmask4_acc <- .data %>% 
-        get_accuracy(fmask4)
-    maja_acc <- .data %>% 
-        get_accuracy(maja)
-    s2cloud_acc <- .data %>% 
-        get_accuracy(s2cloudless)
-    sen2cor_acc <- .data %>% 
-        get_accuracy(sen2cor)
-   
-    # User-Producer accuracies across all images.
-    dplyr::left_join(format_accuracy(fmask4_acc, "fmask4"), 
-                     format_accuracy(maja_acc, "maja"), by = "test") %>%
-        dplyr::left_join(format_accuracy(s2cloud_acc, "s2cloud"), by = "test") %>%
-        dplyr::left_join(format_accuracy(sen2cor_acc, "sen2cor"), by = "test") %>%
-    return()
-}
-
-
-# Summary of accuracies for tile, image and detector.
-res = data_tb %>%
+# summary of accuracies for each tile, image and detector.
+data_tb %>%
     dplyr::select(tile, img_date) %>% 
     dplyr::distinct() %>% 
     dplyr::mutate(conmat = purrr::map2(tile, img_date, function(my_tile, my_img_date){
@@ -445,101 +399,120 @@ res = data_tb %>%
     })) %>% 
     {for (r in 1:nrow(.)) {
         r <- dplyr::slice(., r)
-        print(sprintf("Accucary for image %s %s.", r$tile, r$img_date))
+        print(sprintf("accucary for image %s %s.", r$tile, r$img_date))
         print(r$conmat)
     }}
 
+# summary of accuracies for each tile, and detector.
+conmat <- NULL
+data_tb %>%
+    dplyr::select(tile) %>% 
+    dplyr::distinct() %>% 
+    dplyr::mutate(conmat = purrr::map(tile, function(my_tile){
+        data_tb %>% 
+            dplyr::filter(tile == my_tile) %>% 
+            format_conmat() %>% 
+            return()
+    })) %>% 
+    tidyr::unnest(cols = c(conmat)) %>% 
+    table_to_latex(out_file = file.path(base_path, "tex", "tables", "user_producer_accuracy_tile.tex"),
+                   caption_msg = "User and producer accuracies for each tile and cloud-detection algorithm.") %>% 
+    View()
+    print(n = Inf)
+
+# Summary of accuracies for each detector.
 print("Total accuracy.")
 data_tb %>%
     format_conmat() %>% 
     table_to_latex(out_file = file.path(base_path, "tex", "tables", "user_producer_accuracy.tex"),
-                   caption_msg = "User and producer accuracies for each cloud-detection algorithm.")
+                   caption_msg = "User and producer accuracies for each cloud-detection algorithm.") %>% 
+    print(n = Inf)
+
+```
+
+
+```{r print_img_accuracy_area}
+
+
+stop("Unfinished!")
+
+print("Total accuracy weighted by area.")
+
+# NOTE: Use Fmask4 areas as reference.
+areas_tb <- cloud_experts %>% 
+    dplyr::select(tile, img_date, fmask4_r, fmask4_freq) %>% 
+    dplyr::mutate(y_resolution = purrr::map_dbl(fmask4_r, raster::yres),
+                  label_area = purrr::map2(fmask4_freq, y_resolution, 
+                                           function(freq_tb, yres){
+                                               freq_tb <- freq_tb %>% 
+                                                   dplyr::mutate(total = total * yres * yres) %>% 
+                                                   dplyr::mutate(total = ifelse(total == 0, NA, total)) %>% 
+                                                   tidyr::drop_na()
+                                               res <- freq_tb %>% 
+                                                   dplyr::pull(total) %>% 
+                                                   magrittr::set_names(dplyr::pull(freq_tb, label))
+                                               if (!("clear" %in% names(res))) 
+                                                   res <- c(res, "clear" = 0)
+                                               if (!("cloud" %in% names(res))) 
+                                                   res <- c(res, "cloud" = 0)
+                                               if (!("shadow" %in% names(res))) 
+                                                   res <- c(res, "shadow" = 0)
+                                               return(res)
+                                           })) %>% 
+    dplyr::select(-fmask4_freq, -fmask4_r, -y_resolution)
+
+
+
+format_conmat_area <- function(.data, area_vec){
+    expert <- fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
+    
+    fmask4_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = fmask4, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_area(label_areas = area_vec) %>% 
+        magrittr::set_names(c(names(.)[1], paste0("fmask4_", names(.)[-1])))
+    maja_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = maja, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_area(label_areas = area_vec) %>% 
+        magrittr::set_names(c(names(.)[1], paste0("maja_", names(.)[-1])))
+    s2cloud_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = s2cloudless, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_area(label_areas = area_vec) %>% 
+        magrittr::set_names(c(names(.)[1], paste0("s2cloudless_", names(.)[-1])))
+    sen2cor_acc <- .data %>% 
+        get_confusion_matrix(prediction_var = sen2cor, reference_var = expert) %>% 
+        magrittr::extract2("table") %>% 
+        asses_accuracy_area(label_areas = area_vec) %>% 
+        magrittr::set_names(c(names(.)[1], paste0("sen2cor_", names(.)[-1])))
+
+    fmask4_acc %>% 
+        dplyr::left_join(maja_acc, by = "label") %>% 
+        dplyr::left_join(s2cloud_acc, by = "label") %>% 
+        dplyr::left_join(sen2cor_acc, by = "label") %>% 
+    return()
+}
+
+total_area <- do.call(rbind, areas_tb$label_area) %>% 
+    colSums()
+data_tb %>%
+    format_conmat_area(area_vec = total_area) %>% 
+    View()
 
 
 ```
 
 
 
-```{r print_summary_table}
 
-#' @title Format the accuracy matrix of a detector.
-#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description Format the accuracy matrix of a detector.
-#'
-#' @param .data  A tibble representing the confusion matrix of a cloud-detecting algorithm.
-#' @param suffix A length-one character. A suffix to be appended to the colum names.
-#' @return       A tibble.
-format_accuracy_alt <- function(.data, suffix){
-    test <- NULL
-    producer_acc <- .data %>% 
-        dplyr::slice(nrow(.)) %>% 
-        dplyr::select(-1) %>% 
-        unlist() %>% 
-        tibble::enframe() %>%
-        dplyr::select(-1) %>%
-        dplyr::rename("prod_acc" = 1)
-    .data %>% 
-        dplyr::select(1, ncol(.)) %>%
-        dplyr::mutate(test = replace(test, test == "prod_acc", "overall_acc")) %>%
-        dplyr::bind_cols(producer_acc) %>%
-        magrittr::set_colnames(c(colnames(.)[1], paste(colnames(.)[-1], suffix, sep = '_'))) %>%
-        return()
-}
+
+
+```{r TODO_print_summary_table_michelle_style}
 
 # TODO: write format_accuracy_alt in such a way that allows a table like:
 # DATE  DETECTOR      CLOUD      CLEAR        SHADOW
 #                    ua  pa oa   ua  pa oa     ua  pa oa
-
-format_conmat <- function(.data){
-    fmask4_acc <- .data %>% 
-        get_accuracy(fmask4)
-    maja_acc <- .data %>% 
-        get_accuracy(maja)
-    s2cloud_acc <- .data %>% 
-        get_accuracy(s2cloudless)
-    sen2cor_acc <- .data %>% 
-        get_accuracy(sen2cor)
-   
-    # Make sure the matrices have the same number of pixels.
-   stopifnot(sum(fmask4_acc[-nrow(fmask4_acc), c(-1, -ncol(fmask4_acc))]) == sum(maja_acc[-nrow(maja_acc), c(-1, -ncol(maja_acc))]))
-   stopifnot(sum(s2cloud_acc[-nrow(s2cloud_acc), c(-1, -ncol(s2cloud_acc))]) == sum(sen2cor_acc[-nrow(sen2cor_acc), c(-1, -ncol(sen2cor_acc))]))
-   
-   fmask4_acc
-   maja_acc
-   s2cloud_acc
-   sen2cor_acc
-    
-    return()
-}
-
-
-
-
-
-
-
-# OLD code
-
-# Create the latex table of the confusion matrix.
-
-
-## Create the latex table of the confusion matrix for each tile.
-#data_tb %>% 
-#    dplyr::pull(tile) %>% 
-#    unique() %>% 
-#    sort() %>%
-#    tibble::enframe(name = NULL) %>% 
-#    dplyr::rename(tile = value) %>% 
-#    dplyr::mutate(file_path = file.path(base_path, "tex", "tables", 
-#                                       paste0("confusion_matrix_", tile, ".tex")),
-#                  msg = sprintf("User and producer accuracies for tile %s.", tile),
-#                  data_tb = purrr::map(tile, function(my_tile, data_tb){
-#                      data_tb %>% 
-#                          dplyr::filter(tile == my_tile) %>% 
-#                          return()
-#                  }, data_tb = data_tb)) %>%
-#    dplyr::mutate(upacc_tb = purrr::map(data_tb, format_conmat)) %>% 
-#    dplyr::pull(upacc_tb)
 
 ```
 
