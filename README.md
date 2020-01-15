@@ -24,7 +24,7 @@ Comparison of cloud algorithms on Sentinel-2 images.
 
 ### Fmask 4
 
-* use the docker container in e-sensing6: sudo docker run -it -v /home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data:/root/images fmask:4.0 /bin/bash
+* use the docker container in e-sensing6: sudo docker run -it -v /home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/img_l1c:/root/images fmask:4.0 /bin/bash
 * Call the script call_fmask.sh from inside the docker container.
 
 
