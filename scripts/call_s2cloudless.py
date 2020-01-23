@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Run the s2cloudless algorithm on Sentinel2 images.
+Run the s2cloudless algorithm on a set of Sentinel2 images.
 """
 
 import gdal
@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
+import argparse
 from osgeo import gdal_array
 from s2cloudless import S2PixelCloudDetector, CloudMaskRequest
-
 
 
 def subdirs(path):
@@ -79,12 +79,17 @@ def create_mask(band_array, path):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--in_dir", help = "directory with Sentinel-2 images")
+    args = parser.parse_args()
+
     # Path to a directory of Sentinel-2 images
-    path = "/home/alber/Documents/ghProjects/sentinel2-cloud-detector/alber_test/images"
+    #in_dir = "/home/alber/Documents/ghProjects/sentinel2-cloud-detector/alber_test/images"
     # Run the algoritmh on each image.
-    for img in get_img_dir(path):
+    for img in get_img_dir(args.in_dir):
         band_array = create_bandarray(img)
         out_prob, out_mask = create_mask(band_array, img)
         print("Saving probability map to {}".format(out_prob))
         print("Saving mask map to        {}".format(out_mask))
+
 

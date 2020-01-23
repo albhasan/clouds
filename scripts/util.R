@@ -201,41 +201,27 @@ format_accuracy <- function(.data, suffix){
 #' @param .data A tibble with tile, image date, fmask4, maja, s2cloudless, and sen2cor.
 #' @return      A tibble.
 format_conmat <- function(.data){
-    expert <- fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
-    
-    #helper <- function(detector, .data){
-    #    .data %>% 
-    #        get_confusion_matrix(prediction_var = eval(rlang::sym(detector)), 
-    #                             reference_var = expert) %>%  
-    #        magrittr::extract2("table") %>% 
-    #        asses_accuracy_simple() %>% 
-    #        return()
-    #}
-    #c("fmask4", "maja", "s2cloudless", "sen2cor") %>% 
-    #    tibble::enframe(name = NULL) %>% 
-    #    dplyr::rename(detector = value) %>% 
-    #    dplyr::mutate(accuracy_tb =  purrr::map(detector, helper, .data = .data))
     
     fmask4_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = fmask4, reference_var = expert) %>% 
+        get_confusion_matrix(prediction_var = Fmask4, reference_var = Label) %>% 
         magrittr::extract2("table") %>% 
         asses_accuracy_simple() %>% 
-        magrittr::set_names(c(names(.)[1], paste0("fmask4_", names(.)[-1])))
+        magrittr::set_names(c(names(.)[1], paste0("Fmask4_", names(.)[-1])))
     maja_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = maja, reference_var = expert) %>% 
+        get_confusion_matrix(prediction_var = MAJA, reference_var = Label) %>% 
         magrittr::extract2("table") %>% 
         asses_accuracy_simple() %>% 
-        magrittr::set_names(c(names(.)[1], paste0("maja_", names(.)[-1])))
+        magrittr::set_names(c(names(.)[1], paste0("MAJA_", names(.)[-1])))
     s2cloud_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = s2cloudless, reference_var = expert) %>% 
+        get_confusion_matrix(prediction_var = s2cloudless, reference_var = Label) %>% 
         magrittr::extract2("table") %>% 
         asses_accuracy_simple() %>% 
         magrittr::set_names(c(names(.)[1], paste0("s2cloudless_", names(.)[-1])))
     sen2cor_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = sen2cor, reference_var = expert) %>% 
+        get_confusion_matrix(prediction_var = Sen2Cor, reference_var = Label) %>% 
         magrittr::extract2("table") %>% 
         asses_accuracy_simple() %>% 
-        magrittr::set_names(c(names(.)[1], paste0("sen2cor_", names(.)[-1])))
+        magrittr::set_names(c(names(.)[1], paste0("Sen2Cor_", names(.)[-1])))
 
     fmask4_acc %>% 
         dplyr::left_join(maja_acc, by = "label") %>% 
@@ -381,13 +367,18 @@ get_label <- function(point_sf, polygon_sf, polygon_var){
 #'
 #' @param point_sf   A sf object of point geometry.
 #' @param raster_obj A raster object.
+#' @param new_col    An object. Name of the new colum where the raster values are stored.
 #' @return           A sf object.
-get_label_raster <- function(point_sf, raster_obj){
-    point_sf <- point_sf %>%
-        sf::st_transform(crs = raster::crs(raster_obj))
+get_label_raster <- function(point_sf, raster_obj, new_col){
+    new_col <- rlang::enquo(new_col)
+    point_sp <- point_sf %>%
+        sf::st_transform(crs = raster::crs(raster_obj)) %>% 
+        as("Spatial") %>% 
+        sp::SpatialPoints()
     raster_obj %>%
-        raster::extract(as(point_sf, "Spatial"), sp = TRUE) %>%
-        sf::st_as_sf() %>%
+        raster::extract(point_sp, sp = TRUE) %>%
+        sf::st_as_sf() %>% 
+        dplyr::rename(!!new_col := 1) %>% 
         return()
 }
 
@@ -556,7 +547,7 @@ plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE,
     res <- .data %>% 
         ggplot2::ggplot() + 
         ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date, y = total, 
-                                                 fill = label), 
+                                                 fill = Label), 
                           #position = "stack", 
                           position = "dodge", 
                           stat = "identity") +
@@ -584,9 +575,9 @@ plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE,
 #' @description Read a shapefile of sample points.
 #'
 #' @param in_path A length-one character. A path to a shapefile.
-#' @param labels  A character. A named vector with values for cirrus, clear, cloud, and shadow.
 #' @return        An sf object.
-read_samples <- function(in_path, labels) {
+read_samples <- function(in_path) {
+    empty_geom <- NULL
     in_path %>%
         sf::read_sf(options = "ENCODING=latin1") %>%
         ensurer::ensure_that(ncol(.) == 3, 
@@ -594,6 +585,10 @@ read_samples <- function(in_path, labels) {
                                                 in_path)) %>%
         dplyr::rename(FID = 1, label = 2) %>%
         .recode_samples(coded_var = label) %>%
+        dplyr::filter(!is.na(label)) %>% 
+        dplyr::mutate(empty_geom = st_is_empty(.)) %>% 
+        dplyr::filter(empty_geom == FALSE) %>% 
+        dplyr::select(-empty_geom) %>% 
         return()
 }
 
@@ -880,29 +875,6 @@ recode_sf_water <- function(samples_sf, coded_var) {
 }
 
 
-#' @title Rename the columns of the samples.
-#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description Rename the columns of the samples SF object.
-#'
-#' @param true_value A tibble.
-#' @return           A tibble.
-rename_samples <- function(samples_sf) {
-    samples_sf %>%
-        ensurer::ensure_that(ncol(.) == 10, 
-                             err_desc = "Unexpected columns found!") %>%
-        dplyr::rename("FID"         = 1,
-                      "expert"      = 2,
-                      "prodes"      = 3,
-                      "water"       = 4, 
-                      "urban"       = 5,
-                      "fmask4"      = 6,
-                      "maja"        = 7,
-                      "sen2cor"     = 8, 
-                      "s2cloudless" = 9) %>%
-        return()
-}
-
-
 #' @title Export a table to a latex file.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Save an object as a latex table in latex format.
@@ -953,25 +925,29 @@ table_to_latex <- function(obj, out_file, caption_msg) {
         {
             # labels used by experts, including typos. 
             # NOTE: It MUST match the recoding values!
-            label_vector <- c("cirrus", "cloud", "fora", "nao nuvem", 
-                              "nao_nuvem", "não nuvem", "nuvem", "nï¿½o nuvem",
-                              
-                              
-                              "nÃ£o nuvem", 
-                              "Nuvem", "shadow_new", "sombra", "sombra_nuvem") %>% 
+            label_vector <- c("cirrus", "Cirrus", "claro", "clean", "clear", "cloud", "Cloud", "fora", "Land",
+                              "nao nuvem",  "nao_nuvem", "não nuvem", "nuvem", 
+                              "nï¿½o nuvem", "nÃ£o nuvem",  "Nuvem", "other", 
+                              "others", "sem nuvem", "shadow", "Shadow", "shadow_new", "sombra", "sombra_nuvem") %>% 
                 sort()
             user_vector <- sort(unique(dplyr::pull(samples_sf, !!coded_var))) 
             # Report any missing label in the data provided by the experts.
             if (any(!(user_vector %in% label_vector)))
-                stop(sprintf("Missing labels found: %s",  
+                stop(sprintf("Missing labels found: %s \n",  
                              user_vector[!(user_vector %in% label_vector)]))
             rm(label_vector, user_vector)
             invisible(.)
         } %>%
         dplyr::mutate(!!coded_var := dplyr::recode(!!coded_var,
                                                "cirrus"       = "cirrus",
+                                               "Cirrus"       = "cirrus",
+                                               "claro"        = "clear",
+                                               "clean"        = "clear",
+                                               "clear"        = "clear",
                                                "cloud"        = "cloud",
+                                               "Cloud"        = "cloud",
                                                "fora"         = NA_character_,
+                                               "Land"         = "clear",
                                                "nao nuvem"    = "clear",
                                                "nao_nuvem"    = "clear",
                                                "não nuvem"    = "clear",
@@ -979,6 +955,11 @@ table_to_latex <- function(obj, out_file, caption_msg) {
                                                "nÃ£o nuvem"   = "clear",
                                                "nuvem"        = "cloud",
                                                "Nuvem"        = "cloud",
+                                               "other"        = NA_character_,
+                                               "others"       = NA_character_,
+                                               "sem nuvem"    = "shadow",
+                                               "shadow"       = "shadow",
+                                               "Shadow"       = "shadow",
                                                "shadow_new"   = "shadow",
                                                "sombra"       = "shadow",
                                                "sombra_nuvem" = "shadow",

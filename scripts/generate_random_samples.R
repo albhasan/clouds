@@ -3,7 +3,7 @@ library(sf)
 library(raster)
 
 base_path <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds"
-out_dir   <- file.path(base_path, "data", "samples", "point")
+out_dir   <- file.path(base_path, "data", "samples", "template_point")
 stopifnot(all(sapply(c(base_path, out_dir), dir.exists)))
 
 source(file.path(base_path, "scripts", "util.R"))
@@ -25,26 +25,33 @@ raster_extent_as_sf <- function(file_path){
 
 band_01 <- dir_name <- file_path <- img_date <- mission <- tile <- NULL
 images_tb <- base_path %>%
-    file.path("data", "fmask4_s2cloudless") %>%
+    file.path("data", "img_l1c") %>%
     list.dirs() %>%
     tibble::enframe(name = NULL) %>%
     dplyr::rename(file_path = "value") %>%
     dplyr::filter(endsWith(file_path, ".SAFE")) %>%
-    dplyr::mutate(dir_name = tools::file_path_sans_ext(basename(file_path))) %>% 
+    dplyr::mutate(dir_name = tools::file_path_sans_ext(basename(file_path))) %>%
     tidyr::separate(col = dir_name,
                     into = c("mission", "level", "img_date", "baseline",
                              "orbit", "tile", "processing"), sep = '_') %>%
-    dplyr::filter(mission %in% selected_mission, tile %in% selected_tile) %>%
+    dplyr::filter(mission == "S2A",
+                  tile %in% c(
+                              #"T19LFK",
+                              "T20NPH",
+                              #"T21LXH",
+                              #"T22MCA",
+                              "T22NCG"
+                              )) %>%
     dplyr::group_by(mission, tile) %>%
     dplyr::arrange(img_date) %>%
     dplyr::slice(1) %>%
-    dplyr::ungroup() %>% 
-    dplyr::mutate(band01  = purrr::map_chr(file_path, find_files, 
+    dplyr::ungroup() %>%
+    dplyr::mutate(band01  = purrr::map_chr(file_path, find_files,
                                            pattern = "_B01[.]jp2"),
                   ext     = purrr::map(band01, raster_extent_as_sf),
-                  obj     = purrr::map(ext, sf::st_sample, size = n_samples, 
+                  obj     = purrr::map(ext, sf::st_sample, size = n_samples,
                                        type = "random"),
-                  layer = file.path(out_dir, stringr::str_c(mission, level, tile, 
+                  layer = file.path(out_dir, stringr::str_c(mission, level, tile,
                                             "samples.shp", sep = "_"))) %>%
     ensurer::ensure_that(nrow(.) > 0,err_desc = "No images found") %>%
     dplyr::mutate(w = purrr::map2(obj, layer, sf::st_write))

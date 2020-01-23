@@ -23,16 +23,6 @@ landsat_scenes <- "/home/alber/Documents/data/experiments/prodes_reproduction/pa
 sentinel_tiles <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/sentinel_2_index_shapefile.shp"
 stopifnot(all(vapply(c(landsat_scenes, sentinel_tiles), file.exists, logical(1))))
 
-# Match Sentinel to Landsat images.
-sentinel2landsat <- match_scenes2tiles(tile_path = sentinel_tiles, 
-                                       scene_path = landsat_scenes, 
-                                       tiles = stringr::str_sub(c("T19LFK", "T21LXH", "T22MCA"), 2), 
-                                       scenes = NULL) %>%
-    dplyr::mutate(tile = stringr::str_c("T", tile),
-                  path = stringr::str_sub(scene, 1, 3),
-                  row  = stringr::str_sub(scene, 4, 6)) %>%
-    tidyr::nest(scene = c("scene", "path", "row"))
-
 ```
 
 
@@ -52,7 +42,7 @@ fm4_s2cloud_tb <- base_path %>%
     dplyr::mutate(dir_name = tools::file_path_sans_ext(basename(file_path))) %>% 
     tidyr::separate(col = dir_name,
                     into = c("mission", "level", "img_date", "baseline",
-                             "orbit", "tile", "processing"), sep = '_') %>%
+                             "orbit", "tile", "processing"), sep = '_')  %>%
     dplyr::mutate(fmask4 = purrr::map_chr(file_path, find_files, 
                                           pattern = "._Fmask4[.]tif$"),
                   s2cloudless = purrr::map_chr(file_path, find_files, 
@@ -180,47 +170,6 @@ cloud_imgs <- cloud_imgs %>%
 
 
 
-```{r get_data_masks}
-
-#---- Urban mask. ----
-file_name <- NULL
-urban_tb <- base_path %>%
-    file.path("data", "masks", "urban", "tiled") %>%
-    list.files(pattern = "[.]tif$", full.names = TRUE) %>%
-    tibble::enframe(name = NULL) %>%
-    dplyr::rename(file_path = value) %>%
-    dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path)),
-                  urban_r = purrr::map(file_path, raster::raster)) %>%
-    tidyr::separate(col = file_name, into = c(NA, NA, "tile"))  %>%
-    dplyr::mutate(tile = stringr::str_to_upper(tile)) %>%
-    dplyr::select(-file_path)
-
-#---- Water mask. ----
-water_tb <- base_path %>%
-    file.path("data", "masks", "water", "tiled") %>%
-    list.files(pattern = "[.]tif$", full.names = TRUE) %>%
-    tibble::enframe(name = NULL) %>%
-    dplyr::rename(file_path = value) %>%
-    dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path)),
-                  water_r = purrr::map(file_path, raster::raster)) %>%
-    tidyr::separate(col = file_name, into = c(NA, "tile")) %>%
-    dplyr::mutate(tile = stringr::str_to_upper(tile)) %>%
-    dplyr::select(-file_path)
-
-#---- PRODES mask. ----
-prodes_tb <- base_path %>%
-    file.path("data", "masks", "prodes", "tiled") %>%
-    list.files(pattern = "[.]shp$", full.names = TRUE) %>%
-    ensurer::ensure_that(length(.) > 0, err_desc = "Shapefiles not found!") %>%
-    tibble::enframe(name = NULL) %>%
-    dplyr::rename(file_path = value) %>%
-    dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path)),
-                  prodes = purrr::map(file_path, sf::read_sf)) %>%
-    tidyr::separate(col = file_name, into = c(NA, NA, NA, "path", "row"), 
-                    sep = '_') %>%
-    dplyr::select(-file_path)
-
-```
 
 
 ```{r get_expert_samples}
@@ -238,48 +187,51 @@ cloud_experts <- base_path %>%
     tidyr::separate(col = file_name, into = c("mission", "level", "tile", NA, 
                                               "img_date")) %>%
     dplyr::filter((mission == "S2A" & tile == "T19LFK" & img_date %in% c("20161004T144732", "20170102T144722", "20180507T144731", "20181103T144731")) |
+                  (mission == "S2A" & tile == "T20NPH" & img_date %in% c("20160901T143752", "20161110T143752", "20170218T143751", "20170718T143751")) |
                   (mission == "S2A" & tile == "T21LXH" & img_date %in% c("20170328T140051", "20180611T140051", "20180919T140051", "20181009T140051")) | 
-                  (mission == "S2A" & tile == "T22MCA" & img_date %in% c("20170603T135111", "20170623T135111", "20180419T135111", "20180628T135111"))) %>% 
+                  (mission == "S2A" & tile == "T22MCA" & img_date %in% c("20170603T135111", "20170623T135111", "20180419T135111", "20180628T135111")) |
+                  (mission == "S2A" & tile == "T22NCG" & img_date %in% c("20160929T140052", "20161019T140052", "20170527T140101", "20170706T140051"))) %>% 
+    ensurer::ensure_that(nrow(.) == 20, err_desc = "Wrong number of shapefiles!") %>% 
     dplyr::mutate(samples_sf = purrr::map(file_path, read_samples),
-                  n_samples = purrr::map_int(samples_sf, nrow),
                   srs = purrr::map(samples_sf, sf::st_crs)) %>%
-    dplyr::left_join(sentinel2landsat, by = "tile") %>%
-    dplyr::mutate(prodes_merged = purrr::map(scene, merge_prodes_scenes, 
-                                             prodes_tb = prodes_tb, srs = NULL)) %>%
-    # Get the values for the samples.
-    # NOTE: DO NOT change the order in which the columns are added, otherwise update
-    # the function rename_samples.
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, prodes_merged, get_label, 
-                                              polygon_var = class_name)) %>%
-    dplyr::left_join(water_tb, by = "tile") %>%
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, water_r, get_label_raster)) %>%
-    dplyr::left_join(urban_tb, by = "tile") %>%
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, urban_r, get_label_raster)) %>%
     dplyr::inner_join(cloud_mask_tb, by = c("tile", "img_date")) %>%
-    # NOTE: Do NOT merge the mutates.
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, fmask4_r,      get_label_raster)) %>%
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, maja_r,        get_label_raster)) %>%
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, sen2cor_r,     get_label_raster)) %>%
-    dplyr::mutate(samples_sf = purrr::map2(samples_sf, s2cloudless_r, get_label_raster)) %>%
-    dplyr::mutate(samples_sf = purrr::map(samples_sf, rename_samples)) %>%
+    ensurer::ensure_that(nrow(.) == 20, err_desc = "Wrong number of cloud masks!") %>%
+    dplyr::mutate(fmask4_sf  = purrr::map2(samples_sf, fmask4_r,      purrr::possibly(get_label_raster, NA), new_col = Fmask4)) %>%
+    dplyr::mutate(maja_sf    = purrr::map2(samples_sf, maja_r,        purrr::possibly(get_label_raster, NA), new_col = MAJA)) %>%
+    dplyr::mutate(sen2cor_sf = purrr::map2(samples_sf, sen2cor_r,     purrr::possibly(get_label_raster, NA), new_col = Sen2Cor)) %>%
+    dplyr::mutate(s2cloud_sf = purrr::map2(samples_sf, s2cloudless_r, purrr::possibly(get_label_raster, NA), new_col = s2cloudless)) %>%
+    ensurer::ensure_that(all(!vapply(.$fmask4_sf,  tibble::is_tibble, logical(1))),
+                         all(!vapply(.$maja_sf,    tibble::is_tibble, logical(1))),
+                         all(!vapply(.$sen2cor_sf, tibble::is_tibble, logical(1))),
+                         all(!vapply(.$s2cloud_sf, tibble::is_tibble, logical(1))),
+                         err_desc = "Failed to get samples labels from cloud masks!") %>% 
+    dplyr::mutate(samples_sf = purrr::pmap(dplyr::select(., samples_sf, fmask4_sf, maja_sf, sen2cor_sf, s2cloud_sf),
+                                           function(samples_sf, fmask4_sf, maja_sf, sen2cor_sf, s2cloud_sf){
+                                               samples_sf %>%
+                                                   dplyr::bind_cols(sf::st_set_geometry(fmask4_sf,  NULL),
+                                                                    sf::st_set_geometry(maja_sf,    NULL),
+                                                                    sf::st_set_geometry(sen2cor_sf, NULL),
+                                                                    sf::st_set_geometry(s2cloud_sf, NULL)) %>% 
+                                                   return()
+                                           })) %>% 
     # Recode.
-    dplyr::mutate(samples_sf = purrr::map(samples_sf, recode_sf_prodes,      coded_var = prodes),
-                  samples_sf = purrr::map(samples_sf, recode_sf_water,       coded_var = water),
-                  samples_sf = purrr::map(samples_sf, recode_sf_urban,       coded_var = urban),
-                  samples_sf = purrr::map(samples_sf, recode_sf_fmask4,      coded_var = fmask4),
-                  samples_sf = purrr::map(samples_sf, recode_sf_maja,        coded_var = maja),
-                  samples_sf = purrr::map(samples_sf, recode_sf_sen2cor,     coded_var = sen2cor),
+    dplyr::mutate(samples_sf = purrr::map(samples_sf, recode_sf_fmask4,      coded_var = Fmask4),
+                  samples_sf = purrr::map(samples_sf, recode_sf_maja,        coded_var = MAJA),
+                  samples_sf = purrr::map(samples_sf, recode_sf_sen2cor,     coded_var = Sen2Cor),
                   samples_sf = purrr::map(samples_sf, recode_sf_s2cloudless, coded_var = s2cloudless)) %>%
     # Compute the frequency of each class in each image.
-    dplyr::mutate(fmask4_freq      = purrr::map(fmask4_r,      get_raster_freq, detector = fmask4),
-                  maja_freq        = purrr::map(maja_r,        get_raster_freq, detector = maja),
-                  s2cloudless_freq = purrr::map(s2cloudless_r, get_raster_freq, detector = s2cloudless),
-                  sen2cor_freq     = purrr::map(sen2cor_r,     get_raster_freq, detector = sen2cor))
-
+    dplyr::mutate(fmask4_freq      = purrr::map(fmask4_r,      purrr::possibly(get_raster_freq, NA), detector = fmask4),
+                  maja_freq        = purrr::map(maja_r,        purrr::possibly(get_raster_freq, NA), detector = maja),
+                  s2cloudless_freq = purrr::map(s2cloudless_r, purrr::possibly(get_raster_freq, NA), detector = s2cloudless),
+                  sen2cor_freq     = purrr::map(sen2cor_r,     purrr::possibly(get_raster_freq, NA), detector = sen2cor)) %>% 
+    ensurer::ensure_that(all(!vapply(.$fmask4_r,      tibble::is_tibble, logical(1))),
+                         all(!vapply(.$maja_r,        tibble::is_tibble, logical(1))),
+                         all(!vapply(.$sen2cor_r,     tibble::is_tibble, logical(1))),
+                         all(!vapply(.$s2cloudless_r, tibble::is_tibble, logical(1))),
+                         err_desc = "Failed to get label frequencies from cloud masks!")
 
 saveRDS(cloud_experts, file = "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/cloud_experts.rds")
-cloud_experts <- readRDS(cloud_experts, file = "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/cloud_experts.rds")
-
+cloud_experts <- readRDS(file = "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/cloud_experts.rds")
 
 recode_vec <- c("cirrus" = "cloud", 
                 "clear"  = "clear", 
@@ -297,19 +249,76 @@ data_tb <- cloud_experts %>%
     dplyr::select(-FID) %>%
     tidyr::drop_na() %>%
     tibble::as_tibble() %>%
-    dplyr::mutate(land_cover = dplyr::case_when(urban ~ "urban",
-                                                water ~ "water",
-                                                TRUE  ~ prodes)) %>%
-    dplyr::select(-c(prodes, water, urban)) %>%
-    dplyr::mutate(expert      = dplyr::recode(expert,      !!!recode_vec),
-                  fmask4      = dplyr::recode(fmask4,      !!!recode_vec),
-                  maja        = dplyr::recode(maja,        !!!recode_vec),
+    dplyr::mutate(Label       = dplyr::recode(label,       !!!recode_vec),
+                  Fmask4      = dplyr::recode(Fmask4,      !!!recode_vec),
+                  MAJA        = dplyr::recode(MAJA,        !!!recode_vec),
                   s2cloudless = dplyr::recode(s2cloudless, !!!recode_vec),
-                  sen2cor     = dplyr::recode(sen2cor,     !!!recode_vec))
+                  Sen2Cor     = dplyr::recode(Sen2Cor,     !!!recode_vec)) %>% 
+    dplyr::select(-c(fmask4, maja, sen2cor, label)) %>% 
+    dplyr::select(mission, level, tile, img_date, Label, Fmask4, MAJA, Sen2Cor, 
+                  s2cloudless) %>% 
+    ensurer::ensure_that(all(!is.na(.$Label)),
+                         all(!is.na(.$Fmask4)),
+                         all(!is.na(.$MAJA)),
+                         all(!is.na(.$s2cloudless)),
+                         all(!is.na(.$Sen2Cor)),
+                         err_desc = "NAs found in analysis data!")
 
 ```
 
 
+```{r print_samples}
+
+data_tb %>% 
+    dplyr::select(tile, img_date) %>% 
+    dplyr::group_by(tile, img_date) %>% 
+    dplyr::summarise(n = n()) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::arrange(tile, img_date) %>% 
+    (function(.){print("Number of expert's samples by image"); invisible(.)}) %>% 
+    dplyr::mutate(Date = format(lubridate::ymd(stringr::str_sub(img_date, 1, 8)), 
+                                "%y/%m/%d"),
+                  Samples = n) %>% 
+    dplyr::rename(Tile = tile) %>% 
+    dplyr::select(-c(n, img_date)) %>% 
+    dplyr::arrange(Tile, Date) %>% 
+    table_to_latex(out_file = file.path(base_path, "tex", "tables", 
+                                        "sample_number.tex"),
+                   caption_msg = "Number of samples per image.") %>% 
+    print(n = Inf)
+
+data_tb %>% 
+    dplyr::select(tile, img_date, Label) %>% 
+    dplyr::group_by(tile, img_date, Label) %>% 
+    dplyr::summarise(n = n()) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::arrange(tile, img_date, Label) %>% 
+    (function(.){
+        print("Number of expert's samples by image and label")
+        invisible(.)
+    }) %>% 
+    dplyr::filter(Label == "shadow") %>% 
+    #dplyr::filter(Lablle == "cloud") %>% 
+    #dplyr::filter(Lablle == "clear") %>% 
+    print(n = Inf)
+
+data_tb %>% 
+    dplyr::select(tile, Label) %>% 
+    dplyr::group_by(tile, Label) %>% 
+    dplyr::summarise(n = n()) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::arrange(tile, Label) %>% 
+    (function(.){
+        print("Number of expert's samples by tile and label")
+        invisible(.)
+    }) %>% 
+    #dplyr::filter(expert == "shadow") %>% 
+    #dplyr::filter(expert == "cloud") %>% 
+    #dplyr::filter(expert == "clear") %>% 
+    print(n = Inf)
+
+
+```
 
 ```{r plot_images}
 
@@ -331,19 +340,23 @@ img_freq <- dplyr::bind_rows(fmask4_img_freq, maja_img_freq,
                              s2cloud_img_freq, sen2cor_img_freq)
 
 
+detector_name <- c(fmask4 = "Fmask4", maja = "MAJA", sen2cor = "Sen2Cor", 
+                   s2cloud = "s2cloudless")
 plot_tb <- img_freq %>% 
     tidyr::drop_na() %>%
-    dplyr::mutate(img_date = stringr::str_sub(img_date, 1, 8)) %>% 
-    dplyr::mutate(label = dplyr::recode(label,
-                                        "cirrus" = "0_cirrus",
-                                        "cloud"  = "1_cloud",
-                                        "clear"  = "2_clear",
-                                        "shadow" = "3_shadow"))
+    dplyr::mutate(img_date = stringr::str_sub(img_date, 1, 8),
+                  detector = dplyr::recode(detector, !!!detector_name)) %>% 
+    dplyr::rename(Label = label) %>% 
+    ensurer::ensure_that(all(!is.na(.$Label)),
+                         all(!is.na(.$total)),
+                         all(!is.na(.$detector)),
+                         err_desc = "NAs found in plot data!")
+    
 
 #---- Plot images using historgram ----
 png(width = 960, height = 960, pointsize = 24, 
     filename = file.path(base_path, "tex", "images", 
-                         "pixels_by_detector_v3.png"))
+                         "pixels_by_detector_v4.png"))
 # Get the tiles and properties for each plot,
 img_freq %>%
     dplyr::pull(tile) %>%
@@ -378,7 +391,8 @@ img_freq %>%
                                           }, plot_tb = plot_tb)) %>%
     dplyr::pull(tile_plot) %>% 
     {multiplot(plotlist = ., file = "deleteme", cols = 4, 
-               layout = matrix(c(1, 1, 2, 2, 3, 3, 4), nrow = 1, byrow = TRUE))}
+               layout = matrix(c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6), 
+                               nrow = 1, byrow = TRUE))}
 dev.off()
 
 ```
@@ -391,12 +405,14 @@ dev.off()
 data_tb %>%
     dplyr::select(tile, img_date) %>% 
     dplyr::distinct() %>% 
-    dplyr::mutate(conmat = purrr::map2(tile, img_date, function(my_tile, my_img_date){
-        data_tb %>% 
-            dplyr::filter(tile == my_tile, img_date == my_img_date) %>% 
-            format_conmat() %>% 
-            return()
-    })) %>% 
+    dplyr::mutate(conmat = purrr::map2(tile, img_date, 
+                                       function(my_tile, my_img_date, data_tb){
+                                           data_tb %>% 
+                                               dplyr::filter(tile == my_tile, 
+                                                             img_date == my_img_date) %>% 
+                                               format_conmat() %>% 
+                                               return()
+                                       }, data_tb = data_tb)) %>% 
     {for (r in 1:nrow(.)) {
         r <- dplyr::slice(., r)
         print(sprintf("accucary for image %s %s.", r$tile, r$img_date))
@@ -417,7 +433,7 @@ data_tb %>%
     tidyr::unnest(cols = c(conmat)) %>% 
     table_to_latex(out_file = file.path(base_path, "tex", "tables", "user_producer_accuracy_tile.tex"),
                    caption_msg = "User and producer accuracies for each tile and cloud-detection algorithm.") %>% 
-    View()
+    #View()
     print(n = Inf)
 
 # Summary of accuracies for each detector.
@@ -432,7 +448,6 @@ data_tb %>%
 
 
 ```{r print_img_accuracy_area}
-
 
 stop("Unfinished!")
 
