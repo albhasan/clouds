@@ -35,13 +35,8 @@ images_tb <- base_path %>%
                     into = c("mission", "level", "img_date", "baseline",
                              "orbit", "tile", "processing"), sep = '_') %>%
     dplyr::filter(mission == "S2A",
-                  tile %in% c(
-                              #"T19LFK",
-                              "T20NPH",
-                              #"T21LXH",
-                              #"T22MCA",
-                              "T22NCG"
-                              )) %>%
+                  tile %in% c("T19LFK", "T20NPH", "T21LXH", "T22MCA",
+                              "T22NCG")) %>%
     dplyr::group_by(mission, tile) %>%
     dplyr::arrange(img_date) %>%
     dplyr::slice(1) %>%
@@ -55,6 +50,4 @@ images_tb <- base_path %>%
                                             "samples.shp", sep = "_"))) %>%
     ensurer::ensure_that(nrow(.) > 0,err_desc = "No images found") %>%
     dplyr::mutate(w = purrr::map2(obj, layer, sf::st_write))
-
-
 
