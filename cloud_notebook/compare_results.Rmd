@@ -10,6 +10,7 @@ editor_options:
 suppressPackageStartupMessages(require(caret))
 suppressPackageStartupMessages(require(dplyr))
 suppressPackageStartupMessages(require(raster))
+suppressPackageStartupMessages(require(scales))
 suppressPackageStartupMessages(require(sf))
 suppressPackageStartupMessages(require(stars))
 suppressPackageStartupMessages(require(xtable))
@@ -277,7 +278,7 @@ data_tb %>%
     dplyr::arrange(tile, img_date) %>% 
     (function(.){print("Number of expert's samples by image"); invisible(.)}) %>% 
     dplyr::mutate(Date = format(lubridate::ymd(stringr::str_sub(img_date, 1, 8)), 
-                                "%y/%m/%d"),
+                                "%Y/%m/%d"),
                   Samples = n) %>% 
     dplyr::rename(Tile = tile) %>% 
     dplyr::select(-c(n, img_date)) %>% 
@@ -285,7 +286,9 @@ data_tb %>%
     table_to_latex(out_file = file.path(base_path, "tex", "tables", 
                                         "sample_number.tex"),
                    caption_msg = "Number of samples per image.") %>% 
-    print(n = Inf)
+    (function(.){print(., n = Inf); invisible(.)}) %>% 
+    dplyr::summarise(total = sum(Samples))
+    
 
 data_tb %>% 
     dplyr::select(tile, img_date, Label) %>% 
@@ -325,7 +328,8 @@ data_tb %>%
 fmask4_freq <- maja_freq <- s2cloudless_freq <- sen2cor_freq <- NULL
 img_freq <- cloud_experts %>%
     dplyr::select(tile, img_date, fmask4 = fmask4_freq, maja = maja_freq, 
-                  s2cloud = s2cloudless_freq, sen2cor = sen2cor_freq)
+                  s2cloud = s2cloudless_freq, sen2cor = sen2cor_freq) %>% 
+    dplyr::mutate(img_date = lubridate::ymd(stringr::str_sub(img_date, 1, 8)))
 
 fmask4_img_freq  <- img_freq %>% format_freq(fmask4)
 sen2cor_img_freq <- img_freq %>% format_freq(sen2cor)
@@ -356,7 +360,7 @@ plot_tb <- img_freq %>%
 #---- Plot images using historgram ----
 png(width = 960, height = 960, pointsize = 24, 
     filename = file.path(base_path, "tex", "images", 
-                         "pixels_by_detector_v4.png"))
+                         "pixels_by_detector_v5.png"))
 # Get the tiles and properties for each plot,
 img_freq %>%
     dplyr::pull(tile) %>%

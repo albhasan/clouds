@@ -552,8 +552,9 @@ plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE,
                           position = "dodge", 
                           stat = "identity") +
         ggplot2::facet_wrap(dplyr::vars(tile, detector), ncol = 1) +
-        ggplot2::theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, hjust = 0)) +
         ggplot2::xlab("Image date.") +
+        #ggplot2::scale_x_date(labels = scales::date_format("%Y-%m-%d")) +
         ggplot2::ylab("Number of pixels.") 
     if (only_legend) 
         return(ggpubr::as_ggplot(ggpubr::get_legend(res)))
