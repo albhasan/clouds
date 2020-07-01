@@ -462,6 +462,26 @@ match_scenes2tiles <- function(tile_path, scene_path, tiles = NULL,
 } 
 
 
+#' @title Get the metadata of the sample point shapefiles.
+#' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
+#' @description Get the metadata of the sample point shapefiles.
+#'                                                                                                                                                    
+#' @param dir_path  Path to a directory with shapefiles.
+#' @return          A sf object.
+get_sample_shps <- function(dir_path) {
+    dir_path %>% 
+        list.files(pattern = "[.]shp$", full.names = TRUE) %>% 
+        ensurer::ensure_that(length(.) > 0, 
+                             err_desc = "No shapefiles found") %>% 
+        tibble::enframe(name = NULL) %>% 
+        dplyr::rename(file_path = value) %>% 
+        dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path))) %>% 
+        tidyr::separate(col = file_name, into = c("mission", "level", "tile", 
+                                                  NA, "img_date")) %>%
+        return()
+}
+
+
 #' @title Merge PRODES tiles.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Merge PRODES tiles into a single object.
@@ -546,16 +566,21 @@ plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE,
     detector <- img_date <- tile <- total <- NULL
     res <- .data %>% 
         ggplot2::ggplot() + 
-        ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date, y = total, 
+        ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date, 
+                                                 y = total/1000000, 
                                                  fill = Label), 
-                          #position = "stack", 
                           position = "dodge", 
                           stat = "identity") +
         ggplot2::facet_wrap(dplyr::vars(tile, detector), ncol = 1) +
-        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, hjust = 0)) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, 
+                                                           hjust = 0, 
+                                                           size = 10),
+                       axis.text.y = ggplot2::element_text(size = 10),
+                       axis.title.y = ggplot2::element_text(size = 14),
+                       plot.margin = ggplot2::margin(1, 1, 1, 1)) +
         ggplot2::xlab("Image date.") +
         #ggplot2::scale_x_date(labels = scales::date_format("%Y-%m-%d")) +
-        ggplot2::ylab("Number of pixels.") 
+        ggplot2::ylab("Number of pixels (millions).") 
     if (only_legend) 
         return(ggpubr::as_ggplot(ggpubr::get_legend(res)))
     if (!ylabel) {
@@ -926,10 +951,12 @@ table_to_latex <- function(obj, out_file, caption_msg) {
         {
             # labels used by experts, including typos. 
             # NOTE: It MUST match the recoding values!
-            label_vector <- c("cirrus", "Cirrus", "claro", "clean", "clear", "cloud", "Cloud", "fora", "Land",
-                              "nao nuvem",  "nao_nuvem", "não nuvem", "nuvem", 
-                              "nï¿½o nuvem", "nÃ£o nuvem",  "Nuvem", "other", 
-                              "others", "sem nuvem", "shadow", "Shadow", "shadow_new", "sombra", "sombra_nuvem") %>% 
+            label_vector <- c("cirrus", "Cirrus", "claro", "clean", "clear", 
+                              "cloud", "Cloud", "fora", "Land", "nao nuvem",  
+                              "nao_nuvem", "não nuvem", "nuvem", "nï¿½o nuvem", 
+                              "nÃ£o nuvem",  "Nuvem", "other",  "others", "out", 
+                              "sem nuvem", "shadow", "Shadow", "shadow_new", 
+                              "sombra", "sombra_nuvem", "vloud") %>% 
                 sort()
             user_vector <- sort(unique(dplyr::pull(samples_sf, !!coded_var))) 
             # Report any missing label in the data provided by the experts.
@@ -940,8 +967,8 @@ table_to_latex <- function(obj, out_file, caption_msg) {
             invisible(.)
         } %>%
         dplyr::mutate(!!coded_var := dplyr::recode(!!coded_var,
-                                               "cirrus"       = "cirrus",
-                                               "Cirrus"       = "cirrus",
+                                               "cirrus"       = "cloud",
+                                               "Cirrus"       = "cloud",
                                                "claro"        = "clear",
                                                "clean"        = "clear",
                                                "clear"        = "clear",
@@ -958,17 +985,17 @@ table_to_latex <- function(obj, out_file, caption_msg) {
                                                "Nuvem"        = "cloud",
                                                "other"        = NA_character_,
                                                "others"       = NA_character_,
-                                               "sem nuvem"    = "shadow",
+                                               "out"          = NA_character_,
+                                               "sem nuvem"    = "clear",
                                                "shadow"       = "shadow",
                                                "Shadow"       = "shadow",
                                                "shadow_new"   = "shadow",
                                                "sombra"       = "shadow",
                                                "sombra_nuvem" = "shadow",
+                                               "vloud"        = "cloud",
                                                .default       = "missing",
                                                .missing       = NA_character_)) %>%
         ensurer::ensure_that("missing" %in% unique(dplyr::pull(., !!coded_var)) == FALSE, 
                              err_desc = "Unknown expert label!") %>%
         return()
 }
-
-

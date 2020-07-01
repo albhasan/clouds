@@ -22,7 +22,8 @@ source(file.path(base_path, "scripts", "util.R"))
 # Shapefiles with the extent of the images.
 landsat_scenes <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/wrs2_asc_desc.dbf"
 sentinel_tiles <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/sentinel_2_index_shapefile.shp"
-stopifnot(all(vapply(c(landsat_scenes, sentinel_tiles), file.exists, logical(1))))
+stopifnot(all(vapply(c(landsat_scenes, sentinel_tiles), file.exists, 
+                     logical(1))))
 
 ```
 
@@ -104,8 +105,10 @@ s2core_maja_tb %>%
 #---- Join FAMSK4 & S2 CLOUDLESS to MAJA & SEN2COR ----
 mission <- orbit <- tile <- fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
 fm4_s2cloud_maja_s2cor_tb <- fm4_s2cloud_tb %>% 
-    dplyr::full_join(s2core_maja_tb, by = c("mission", "img_date", "tile", "orbit")) %>%
-    dplyr::select(mission, orbit ,tile, img_date, fmask4, maja, sen2cor, s2cloudless) %>%
+    dplyr::full_join(s2core_maja_tb, 
+                     by = c("mission", "img_date", "tile", "orbit")) %>%
+    dplyr::select(mission, orbit ,tile, img_date, fmask4, maja, sen2cor, 
+                  s2cloudless) %>%
     dplyr::arrange(mission, tile, img_date)
 
 #---- Spot duplicates ---
@@ -144,26 +147,26 @@ cloud_mask_tb <- fm4_s2cloud_maja_s2cor_tb %>%
     dplyr::select(-c(fmask4, maja, sen2cor, s2cloudless))
 
 expert <- NULL
-cloud_imgs <- cloud_imgs %>%
-    # Images selected for sampling.
-    # TODO: The experts classified points, not images. Move this to some other place.
-    dplyr::mutate(expert = dplyr::case_when(mission == "S2A" & tile =="T19LFK" & img_date == "20170102T144722" ~ "Anderson",
-                                            mission == "S2A" & tile =="T19LFK" & img_date == "20180507T144731" ~ "Suli",
-                                            mission == "S2A" & tile =="T19LFK" & img_date == "20180527T144731" ~ "Anderson",
-                                            mission == "S2A" & tile =="T19LFK" & img_date == "20181103T144731" ~ "Anderson",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20170328T140051" ~ "Suli",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20170616T140051" ~ "Michel",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20170706T140051" ~ "Michel",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20180611T140051" ~ "Suli",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20180621T140051" ~ "Suli",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20180919T140051" ~ "Suli",
-                                            mission == "S2A" & tile =="T21LXH" & img_date == "20181009T140051" ~ "Michel",
-                                            mission == "S2A" & tile =="T22MCA" & img_date == "20170603T135111" ~ "Michelle",
-                                            mission == "S2A" & tile =="T22MCA" & img_date == "20170623T135111" ~ "Suli",
-                                            mission == "S2A" & tile =="T22MCA" & img_date == "20180419T135111" ~ "Michelle",
-                                            mission == "S2A" & tile =="T22MCA" & img_date == "20180628T135111" ~ "Michelle")) %>%
-    dplyr::select(mission, orbit, tile, img_date, expert, fmask4, maja, sen2cor, s2cloudless) %>%
-    print(n = Inf)
+# cloud_imgs <- cloud_imgs %>%
+#     # Images selected for sampling.
+#     # TODO: The experts classified points, not images. Move this to some other place.
+#     dplyr::mutate(expert = dplyr::case_when(mission == "S2A" & tile =="T19LFK" & img_date == "20170102T144722" ~ "Anderson",
+#                                             mission == "S2A" & tile =="T19LFK" & img_date == "20180507T144731" ~ "Suli",
+#                                             mission == "S2A" & tile =="T19LFK" & img_date == "20180527T144731" ~ "Anderson",
+#                                             mission == "S2A" & tile =="T19LFK" & img_date == "20181103T144731" ~ "Anderson",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20170328T140051" ~ "Suli",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20170616T140051" ~ "Michel",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20170706T140051" ~ "Michel",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20180611T140051" ~ "Suli",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20180621T140051" ~ "Suli",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20180919T140051" ~ "Suli",
+#                                             mission == "S2A" & tile =="T21LXH" & img_date == "20181009T140051" ~ "Michel",
+#                                             mission == "S2A" & tile =="T22MCA" & img_date == "20170603T135111" ~ "Michelle",
+#                                             mission == "S2A" & tile =="T22MCA" & img_date == "20170623T135111" ~ "Suli",
+#                                             mission == "S2A" & tile =="T22MCA" & img_date == "20180419T135111" ~ "Michelle",
+#                                             mission == "S2A" & tile =="T22MCA" & img_date == "20180628T135111" ~ "Michelle")) %>%
+#     dplyr::select(mission, orbit, tile, img_date, expert, fmask4, maja, sen2cor, s2cloudless) %>%
+#     print(n = Inf)
 
 ```
 
@@ -177,24 +180,42 @@ cloud_imgs <- cloud_imgs %>%
 
 #---- Shapefiles of clouds. ----
 
+
+# Second classification by experts.
+second_classification <- base_path %>%
+    file.path("data", "samples", "point_second_classification") %>% 
+    get_sample_shps() %>% 
+    dplyr::rename(file_path_2 = file_path)
+
+# Join and filter the two classified point samples provided by experts
+join_samples <- function(sf_1, sf_2) {
+    sf_1 %>% 
+        sf::st_join(y = sf_2, join = st_is_within_distance, dist = 1) %>% 
+        dplyr::filter(label.x == label.y) %>% 
+        dplyr::select(FID = FID.x, label = label.x) %>% 
+        return()
+}
+
 # Read the sample point classified by experts.
 cloud_experts <- base_path %>%
     file.path("data", "samples", "point") %>%
-    list.files(pattern = "[.]shp$", full.names = TRUE) %>%
-    ensurer::ensure_that(length(.) > 0, err_desc = "No shapefiles found!") %>%
-    tibble::enframe(name = NULL) %>%
-    dplyr::rename(file_path = value) %>%
-    dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path))) %>%
-    tidyr::separate(col = file_name, into = c("mission", "level", "tile", NA, 
-                                              "img_date")) %>%
+    get_sample_shps() %>% 
     dplyr::filter((mission == "S2A" & tile == "T19LFK" & img_date %in% c("20161004T144732", "20170102T144722", "20180507T144731", "20181103T144731")) |
-                  (mission == "S2A" & tile == "T20NPH" & img_date %in% c("20160901T143752", "20161110T143752", "20170218T143751", "20170718T143751")) |
-                  (mission == "S2A" & tile == "T21LXH" & img_date %in% c("20170328T140051", "20180611T140051", "20180919T140051", "20181009T140051")) | 
-                  (mission == "S2A" & tile == "T22MCA" & img_date %in% c("20170603T135111", "20170623T135111", "20180419T135111", "20180628T135111")) |
-                  (mission == "S2A" & tile == "T22NCG" & img_date %in% c("20160929T140052", "20161019T140052", "20170527T140101", "20170706T140051"))) %>% 
-    ensurer::ensure_that(nrow(.) == 20, err_desc = "Wrong number of shapefiles!") %>% 
-    dplyr::mutate(samples_sf = purrr::map(file_path, read_samples),
-                  srs = purrr::map(samples_sf, sf::st_crs)) %>%
+                      (mission == "S2A" & tile == "T20NPH" & img_date %in% c("20160901T143752", "20161110T143752", "20170218T143751", "20170718T143751")) |
+                      (mission == "S2A" & tile == "T21LXH" & img_date %in% c("20170328T140051", "20180611T140051", "20180919T140051", "20181009T140051")) | 
+                      (mission == "S2A" & tile == "T22MCA" & img_date %in% c("20170603T135111", "20170623T135111", "20180419T135111", "20180628T135111")) |
+                      (mission == "S2A" & tile == "T22NCG" & img_date %in% c("20160929T140052", "20161019T140052", "20170527T140101", "20170706T140051"))) %>% 
+    dplyr::left_join(second_classification, by = c("mission", "level", "tile", "img_date")) %>% 
+    ensurer::ensure_that(nrow(.) == 20, err_desc = "Wrong number of shapefiles!") %>%
+    dplyr::mutate(samples_sf_1 = purrr::map(file_path, read_samples),
+                  samples_sf_2 = purrr::map(file_path_2, read_samples)) %>% 
+    dplyr::mutate(samples_sf = purrr::map2(samples_sf_1, samples_sf_2, join_samples)) %>% 
+    dplyr::mutate(n_samples = purrr::map(samples_sf, nrow),
+                  n_samples_1 = purrr::map(samples_sf_1, nrow),
+                  n_samples_2 = purrr::map(samples_sf_2, nrow))
+
+cloud_experts <- cloud_experts %>%
+    dplyr::mutate(srs = purrr::map(samples_sf, sf::st_crs)) %>%
     dplyr::inner_join(cloud_mask_tb, by = c("tile", "img_date")) %>%
     ensurer::ensure_that(nrow(.) == 20, err_desc = "Wrong number of cloud masks!") %>%
     dplyr::mutate(fmask4_sf  = purrr::map2(samples_sf, fmask4_r,      purrr::possibly(get_label_raster, NA), new_col = Fmask4)) %>%
@@ -348,7 +369,7 @@ detector_name <- c(fmask4 = "Fmask4", maja = "MAJA", sen2cor = "Sen2Cor",
                    s2cloud = "s2cloudless")
 plot_tb <- img_freq %>% 
     tidyr::drop_na() %>%
-    dplyr::mutate(img_date = stringr::str_sub(img_date, 1, 8),
+    dplyr::mutate(img_date = stringr::str_sub(img_date, 1, 10),
                   detector = dplyr::recode(detector, !!!detector_name)) %>% 
     dplyr::rename(Label = label) %>% 
     ensurer::ensure_that(all(!is.na(.$Label)),
@@ -358,10 +379,12 @@ plot_tb <- img_freq %>%
     
 
 #---- Plot images using historgram ----
-png(width = 960, height = 960, pointsize = 24, 
+png(width = 1820, height = 742, pointsize = 24, 
     filename = file.path(base_path, "tex", "images", 
-                         "pixels_by_detector_v5.png"))
+                         "pixels_by_detector_v6.png"))
+
 # Get the tiles and properties for each plot,
+source("scripts/util.R")
 img_freq %>%
     dplyr::pull(tile) %>%
     unique() %>%
@@ -397,6 +420,7 @@ img_freq %>%
     {multiplot(plotlist = ., file = "deleteme", cols = 4, 
                layout = matrix(c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6), 
                                nrow = 1, byrow = TRUE))}
+
 dev.off()
 
 ```
