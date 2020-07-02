@@ -1,0 +1,17 @@
+Package: clouds
+Title: Comparison of Cloud Cover Detection Algorithms on Sentinel–2 Images of the Amazon Tropical Forest.
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Alber",
+           family = "Sánchez",
+           role = c("aut", "cre"),
+           email = "alber.ipia@inpe.br",
+           comment = c(ORCID = "0000-0001-7966-2880"))
+Description: Code and data used in the paper of the Remote Sensing journal entitled Comparison of Cloud Cover Detection Algorithms on Sentinel–2 Images of the Amazon Tropical Forest.
+License: What license it uses
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
