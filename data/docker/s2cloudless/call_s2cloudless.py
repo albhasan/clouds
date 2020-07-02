@@ -11,9 +11,6 @@ import os
 import argparse
 from osgeo import gdal_array
 from s2cloudless import S2PixelCloudDetector
-# from s2cloudless import CloudMaskRequest
-# import matplotlib.pyplot as plt
-# import sys
 
 
 def subdirs(path):
@@ -46,16 +43,17 @@ def create_bandarray(path):
             buffer_obj = dataset.ReadAsArray()
     # get required bands as arays
     for entry in subdatasets:
-        if (entry.find("B01") != -1 or
-            entry.find("B02") != -1 or
-            entry.find("B04") != -1 or
-            entry.find("B05") != -1 or
-            entry.find("B8A") != -1 or
-            entry.find("B08") != -1 or
-            entry.find("B09") != -1 or
-            entry.find("B10") != -1 or
-            entry.find("B11") != -1 or
-            entry.find("B12") != -1) and entry.find(".xml") == -1:
+        if ((entry.find("B01") != -1 or
+                entry.find("B02") != -1 or
+                entry.find("B04") != -1 or
+                entry.find("B05") != -1 or
+                entry.find("B8A") != -1 or
+                entry.find("B08") != -1 or
+                entry.find("B09") != -1 or
+                entry.find("B10") != -1 or
+                entry.find("B11") != -1 or
+                entry.find("B12") != -1) and
+                entry.find(".xml") == -1):
             dataset = gdal.Open(entry)
             wms_bands.append(dataset.ReadAsArray(buf_obj=buffer_obj))
     return wms_bands
@@ -91,8 +89,6 @@ if __name__ == '__main__':
                         help="directory with Sentinel-2 images")
     args = parser.parse_args()
 
-    # Path to a directory of Sentinel-2 images
-    # in_dir = "/home/alber/Documents/ghProjects/sentinel2-cloud-detector/alber_test/images"
     # Run the algoritmh on each image.
     for img in get_img_dir(args.in_dir):
         band_array = create_bandarray(img)
