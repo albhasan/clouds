@@ -23,27 +23,27 @@ add_upacc <- function(conmat){
 
 #' @title Asses accuracy and estimate area according to Olofsson.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description Compute the accuracy normalized by the area. Note that, these 
+#' @description Compute the accuracy normalized by the area. Note that, these
 #'              computations don't work on clustered sampling.
 #'
-#' @param confusion_matrix A matrix given in sample counts. Columns represent 
-#'                         the reference data and rows the results of the 
+#' @param confusion_matrix A matrix given in sample counts. Columns represent
+#'                         the reference data and rows the results of the
 #'                         classification.
-#' @param label_areas      A named vector of the total area of each label on the 
+#' @param label_areas      A named vector of the total area of each label on the
 #'                         map.
-#' @return                 A tibble of the label areas, their inferior and 
-#'                         superior 95% confidence interval, and the 
+#' @return                 A tibble of the label areas, their inferior and
+#'                         superior 95% confidence interval, and the
 #'                         area-adjusted overall, user, and producer accuracies.
 #' @export
 asses_accuracy_area <- function(confusion_matrix, label_areas){
-    
+
     stopifnot(length(colnames(confusion_matrix)) > 0 && length(rownames(confusion_matrix)) > 0)
     stopifnot(sum(colnames(confusion_matrix) == rownames(confusion_matrix)) == length(colnames(confusion_matrix))) # the order of columns and rows do not match
     stopifnot(all(colnames(confusion_matrix) %in% names(label_areas))) # do names match?
     stopifnot(all(names(label_areas) %in% colnames(confusion_matrix))) # do names match?
     label_areas <- label_areas[colnames(confusion_matrix)] # re-order elements
     stopifnot(all(colnames(confusion_matrix) == names(label_areas))) # do names' positions match?
-    
+
     W <- label_areas/sum(label_areas)
     #W.mat <- matrix(rep(W, times = ncol(confusion_matrix)), ncol = ncol(confusion_matrix))
     n <- rowSums(confusion_matrix)
@@ -62,17 +62,17 @@ asses_accuracy_area <- function(confusion_matrix, label_areas){
     Uhat <- diag(p) / rowSums(p)                                                  # Uhat_i - User accuracy
     Phat <- diag(p) / colSums(p)                                                  # Phat_i - Producer accuracy
     #
-    value <- NULL   
-    label_areas %>% 
-        names() %>% 
-        tibble::enframe(name = NULL) %>% 
-        dplyr::rename(label = value) %>% 
+    value <- NULL
+    label_areas %>%
+        names() %>%
+        tibble::enframe(name = NULL) %>%
+        dplyr::rename(label = value) %>%
         dplyr::mutate(area = label_areas,
                       a_conf95_inf = Ahat_inf,
                       a_conf95_sup = Ahat_sup,
                       overall  = Ohat,
                       user     = Uhat,
-                      producer = Phat) %>% 
+                      producer = Phat) %>%
         return()
 }
 
@@ -85,12 +85,12 @@ asses_accuracy_area <- function(confusion_matrix, label_areas){
 #' @return                 A tibble with the f1 score along the overall, user, and producer accuracies.
 asses_accuracy_simple <- function(confusion_matrix){
     overall <- producer <- user <- f1_score <- NULL
-    confusion_matrix %>% 
-        compute_f1() %>% 
+    confusion_matrix %>%
+        compute_f1() %>%
         dplyr::mutate(overall  = sum(diag(confusion_matrix))/sum(confusion_matrix),
                       producer = diag(confusion_matrix)/colSums(confusion_matrix),
-                      user = diag(confusion_matrix)/rowSums(confusion_matrix)) %>% 
-        dplyr::select(label, f1_score, overall, user, producer) %>% 
+                      user = diag(confusion_matrix)/rowSums(confusion_matrix)) %>%
+        dplyr::select(label, f1_score, overall, user, producer) %>%
         return()
 }
 
@@ -111,7 +111,7 @@ compute_f1 <- function(confusion_matrix){
     # 3     0.861  0.861 0.861
     precision <- diag(confusion_matrix)/colSums(confusion_matrix)
     recall    <- diag(confusion_matrix)/rowSums(confusion_matrix)
-    f1_score <- 2 * precision * recall/(precision + recall) 
+    f1_score <- 2 * precision * recall/(precision + recall)
     return(tibble::tibble(label = names(f1_score), precision, recall, f1_score))
 }
 
@@ -127,28 +127,28 @@ compute_f1 <- function(confusion_matrix){
 #' @param data          A tibble.
 #' @param caption_chr    A lenght-one character. A caption for a TEX table.
 #' @param tex_dir        A lenght-one character. Path to a directory for storing TEX files.
-confusion_matrix2tex <- function(filter_chr, filter_var, prediction_var, 
+confusion_matrix2tex <- function(filter_chr, filter_var, prediction_var,
                                  reference_var, data,  caption_chr, tex_dir){
-    
+
     filter_var     <- rlang::enquo(filter_var)
     prediction_var <- rlang::enquo(prediction_var)
     reference_var  <- rlang::enquo(reference_var)
-    
-    cloud_detector <- as.character(rlang::get_expr(prediction_var)) 
+
+    cloud_detector <- as.character(rlang::get_expr(prediction_var))
     recode_expert2thing <- recode_experts_detector(cloud_detector)
-    
+
     data_tb %>%
         dplyr::filter(!!filter_var == filter_chr) %>%
         dplyr::select(!!reference_var, !!prediction_var) %>%
         dplyr::mutate(!!reference_var := recode_expert2thing(dplyr::pull(., !!reference_var))) %>%
-        get_confusion_matrix(prediction = !!prediction_var, 
+        get_confusion_matrix(prediction = !!prediction_var,
                              reference = !!reference_var) %>%
-        table_to_latex(file_path = file.path(tex_dir, 
-                                             paste0("confusion_matrix_", 
-                                                    cloud_detector, "_", 
-                                                    stringr::str_replace(filter_chr, " ", "-"), 
+        table_to_latex(file_path = file.path(tex_dir,
+                                             paste0("confusion_matrix_",
+                                                    cloud_detector, "_",
+                                                    stringr::str_replace(filter_chr, " ", "-"),
                                                     ".tex")),
-                       caption = sprintf(caption_chr, cloud_detector, 
+                       caption = sprintf(caption_chr, cloud_detector,
                                          filter_chr))
 }
 
@@ -178,14 +178,14 @@ find_files <- function(in_dir, pattern){
 #' @return       A tibble.
 format_accuracy <- function(.data, suffix){
     test <- NULL
-    producer_acc <- .data %>% 
-        dplyr::slice(nrow(.)) %>% 
-        dplyr::select(-1) %>% 
-        unlist() %>% 
+    producer_acc <- .data %>%
+        dplyr::slice(nrow(.)) %>%
+        dplyr::select(-1) %>%
+        unlist() %>%
         tibble::enframe() %>%
         dplyr::select(-1) %>%
         dplyr::rename("prod_acc" = 1)
-    .data %>% 
+    .data %>%
         dplyr::select(1, ncol(.)) %>%
         dplyr::mutate(test = replace(test, test == "prod_acc", "overall_acc")) %>%
         dplyr::bind_cols(producer_acc) %>%
@@ -201,32 +201,32 @@ format_accuracy <- function(.data, suffix){
 #' @param .data A tibble with tile, image date, fmask4, maja, s2cloudless, and sen2cor.
 #' @return      A tibble.
 format_conmat <- function(.data){
-    
-    fmask4_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = Fmask4, reference_var = Label) %>% 
-        magrittr::extract2("table") %>% 
-        asses_accuracy_simple() %>% 
+
+    fmask4_acc <- .data %>%
+        get_confusion_matrix(prediction_var = Fmask4, reference_var = Label) %>%
+        magrittr::extract2("table") %>%
+        asses_accuracy_simple() %>%
         magrittr::set_names(c(names(.)[1], paste0("Fmask4_", names(.)[-1])))
-    maja_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = MAJA, reference_var = Label) %>% 
-        magrittr::extract2("table") %>% 
-        asses_accuracy_simple() %>% 
+    maja_acc <- .data %>%
+        get_confusion_matrix(prediction_var = MAJA, reference_var = Label) %>%
+        magrittr::extract2("table") %>%
+        asses_accuracy_simple() %>%
         magrittr::set_names(c(names(.)[1], paste0("MAJA_", names(.)[-1])))
-    s2cloud_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = s2cloudless, reference_var = Label) %>% 
-        magrittr::extract2("table") %>% 
-        asses_accuracy_simple() %>% 
+    s2cloud_acc <- .data %>%
+        get_confusion_matrix(prediction_var = s2cloudless, reference_var = Label) %>%
+        magrittr::extract2("table") %>%
+        asses_accuracy_simple() %>%
         magrittr::set_names(c(names(.)[1], paste0("s2cloudless_", names(.)[-1])))
-    sen2cor_acc <- .data %>% 
-        get_confusion_matrix(prediction_var = Sen2Cor, reference_var = Label) %>% 
-        magrittr::extract2("table") %>% 
-        asses_accuracy_simple() %>% 
+    sen2cor_acc <- .data %>%
+        get_confusion_matrix(prediction_var = Sen2Cor, reference_var = Label) %>%
+        magrittr::extract2("table") %>%
+        asses_accuracy_simple() %>%
         magrittr::set_names(c(names(.)[1], paste0("Sen2Cor_", names(.)[-1])))
 
-    fmask4_acc %>% 
-        dplyr::left_join(maja_acc, by = "label") %>% 
-        dplyr::left_join(s2cloud_acc, by = "label") %>% 
-        dplyr::left_join(sen2cor_acc, by = "label") %>% 
+    fmask4_acc %>%
+        dplyr::left_join(maja_acc, by = "label") %>%
+        dplyr::left_join(s2cloud_acc, by = "label") %>%
+        dplyr::left_join(sen2cor_acc, by = "label") %>%
     return()
 }
 
@@ -263,13 +263,13 @@ format_freq <- function(.data, detector) {
         dplyr::select(expert, !!detector) %>%
         get_confusion_matrix(prediction = !!detector, reference = expert)
 
-    res %>% 
+    res %>%
         magrittr::extract2("table") %>%
         add_upacc() %>%
         tibble::as_tibble(rownames = "test") %>%
         tibble::as_tibble() %>%
         return()
-} 
+}
 
 
 #' @title Compute a consfusion matrix.
@@ -283,34 +283,34 @@ format_freq <- function(.data, detector) {
 get_confusion_matrix <- function(data_tb, prediction_var, reference_var) {
     prediction_var <- rlang::enquo(prediction_var)
     reference_var  <- rlang::enquo(reference_var)
-    
+
     prediction_vector <- data_tb %>%
         dplyr::pull(!!prediction_var)
     reference_vector <- data_tb %>%
         dplyr::pull(!!reference_var)
-    
+
     factor_labels <- c(prediction_vector, reference_vector) %>%
         unique() %>%
         sort()
-    
+
     #  Handle the special case of perfect prediction of a single label.
     if (length(factor_labels) == 1) {
-        res <- list("positive" = NA, "table" = NA, "overall" = NA, 
+        res <- list("positive" = NA, "table" = NA, "overall" = NA,
                     "byClass" = NA, "mode" = NA, "dots" = NA)
         res[["table"]] <- reference_vector %>%
             length() %>%
             as.matrix() %>%
-            magrittr::set_colnames(factor_labels[1]) %>% 
-            magrittr::set_rownames(factor_labels[1]) 
+            magrittr::set_colnames(factor_labels[1]) %>%
+            magrittr::set_rownames(factor_labels[1])
         return(res)
     }
-    
+
     if (length(factor_labels) < 2) {
         warning("Not enough levels for factor.")
         return(NA)
     }
 
-    caret::confusionMatrix(factor(prediction_vector, levels = factor_labels), 
+    caret::confusionMatrix(factor(prediction_vector, levels = factor_labels),
                            factor(reference_vector,  levels = factor_labels)) %>%
         return()
 }
@@ -326,7 +326,7 @@ get_confusion_matrix <- function(data_tb, prediction_var, reference_var) {
 get_expert_labels <- function(expert_sf){
     expert <- label <- samples_sf <- samples_tb <- NULL
     expert_sf %>%
-        dplyr::mutate(samples_tb = purrr::map(samples_sf, sf::st_set_geometry, 
+        dplyr::mutate(samples_tb = purrr::map(samples_sf, sf::st_set_geometry,
                                               value = NULL)) %>%
         dplyr::pull(samples_tb) %>%
         dplyr::bind_rows() %>%
@@ -344,7 +344,7 @@ get_expert_labels <- function(expert_sf){
 
 #' @title Get the labels from the polygons to the points.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description Intersect points and polygongs, getting a label in the latter 
+#' @description Intersect points and polygongs, getting a label in the latter
 #' for the former.
 #'
 #' @param point_sf    A sf object of point geometry.
@@ -362,7 +362,7 @@ get_label <- function(point_sf, polygon_sf, polygon_var){
 
 #' @title Get the labels from the raster to the points.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description Intersect points and raster, getting a label in the latter 
+#' @description Intersect points and raster, getting a label in the latter
 #' for the former.
 #'
 #' @param point_sf   A sf object of point geometry.
@@ -372,13 +372,13 @@ get_label <- function(point_sf, polygon_sf, polygon_var){
 get_label_raster <- function(point_sf, raster_obj, new_col){
     new_col <- rlang::enquo(new_col)
     point_sp <- point_sf %>%
-        sf::st_transform(crs = raster::crs(raster_obj)) %>% 
-        as("Spatial") %>% 
+        sf::st_transform(crs = raster::crs(raster_obj)) %>%
+        as("Spatial") %>%
         sp::SpatialPoints()
     raster_obj %>%
         raster::extract(point_sp, sp = TRUE) %>%
-        sf::st_as_sf() %>% 
-        dplyr::rename(!!new_col := 1) %>% 
+        sf::st_as_sf() %>%
+        dplyr::rename(!!new_col := 1) %>%
         return()
 }
 
@@ -392,16 +392,16 @@ get_label_raster <- function(point_sf, raster_obj, new_col){
 #' @return         A tibble.
 get_raster_freq <- function(r, detector){
     detector <- rlang::enquo(detector)
-    detector <- rlang::quo_name(detector) 
+    detector <- rlang::quo_name(detector)
     stopifnot(detector %in% c("fmask4", "maja", "s2cloudless", "sen2cor"))
     recode_detector <- NULL
-    if (detector == "fmask4") 
+    if (detector == "fmask4")
         recode_detector <- recode_fmask4
-    if (detector == "maja") 
+    if (detector == "maja")
         recode_detector <- recode_maja
-    if (detector == "s2cloudless") 
+    if (detector == "s2cloudless")
         recode_detector <- recode_s2cloudless
-    if (detector == "sen2cor") 
+    if (detector == "sen2cor")
         recode_detector <- recode_sen2cor
     # Compute frequencies.
     res <- r %>%
@@ -420,7 +420,7 @@ get_raster_freq <- function(r, detector){
             dplyr::mutate(total = 0) %>%
             dplyr::select(label, total) %>%
             dplyr::bind_rows(res)
-    } 
+    }
     #colnames(res) <- paste(colnames(res), detector, sep = '_')
     return(res)
 }
@@ -429,22 +429,22 @@ get_raster_freq <- function(r, detector){
 #' @title Match landsat scenes to sentinel tiles.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Match landsat scenes to sentinel tiles.
-#'                                                                                                                                                    
-#' @param tile_path  A length-one character. Path to a shapefile of Sentinel tiles.                                                                      
-#' @param scene_path A length-one character. Path to a shapefile of Landsat                                                                           
-#' scenes (Worldwide Reference System).                                                                                                               
+#'
+#' @param tile_path  A length-one character. Path to a shapefile of Sentinel tiles.
+#' @param scene_path A length-one character. Path to a shapefile of Landsat
+#' scenes (Worldwide Reference System).
 #' @param tiles      A character. A subset of tiles to be matched. i.e. "22MCA".
 #' @param scenes     A character. A subset of scenes to match. i.e. "226064".
 #' @return           A tibble.
-match_scenes2tiles <- function(tile_path, scene_path, tiles = NULL, 
-                               scenes = NULL, mode = "D") {                                                                                                        
+match_scenes2tiles <- function(tile_path, scene_path, tiles = NULL,
+                               scenes = NULL, mode = "D") {
 
     Name <- PATH <- ROW <- scene <- tile <- NULL
     sentinel_shp <- tile_path %>%
         sf::st_read(quiet = TRUE, stringsAsFactors = FALSE) %>%
         dplyr::rename(tile = Name) %>%
-        {if (is.null(tiles)) return(.) else dplyr::filter(., tile %in% tiles)}  
-    
+        {if (is.null(tiles)) return(.) else dplyr::filter(., tile %in% tiles)}
+
     landsat_shp <- scene_path %>%
         sf::st_read(quiet = TRUE, stringsAsFactors = FALSE) %>%
         dplyr::mutate(scene = stringr::str_c(stringr::str_pad(PATH, 3, pad = "0"),
@@ -452,31 +452,31 @@ match_scenes2tiles <- function(tile_path, scene_path, tiles = NULL,
         sf::st_transform(crs = sf::st_crs(sentinel_shp)$proj4string) %>%
         dplyr::filter(MODE == mode) %>%
         {if (is.null(scenes)) return(.) else dplyr::filter(., scene %in% scenes)}
-    
+
     sf::st_intersection(sentinel_shp, landsat_shp) %>%
         sf::st_set_geometry(NULL) %>%
         dplyr::as_tibble() %>%
         dplyr::select(tile, scene) %>%
         #tidyr::nest(scene = c("scene")) %>%
         return()
-} 
+}
 
 
 #' @title Get the metadata of the sample point shapefiles.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Get the metadata of the sample point shapefiles.
-#'                                                                                                                                                    
+#'
 #' @param dir_path  Path to a directory with shapefiles.
 #' @return          A sf object.
 get_sample_shps <- function(dir_path) {
-    dir_path %>% 
-        list.files(pattern = "[.]shp$", full.names = TRUE) %>% 
-        ensurer::ensure_that(length(.) > 0, 
-                             err_desc = "No shapefiles found") %>% 
-        tibble::enframe(name = NULL) %>% 
-        dplyr::rename(file_path = value) %>% 
-        dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path))) %>% 
-        tidyr::separate(col = file_name, into = c("mission", "level", "tile", 
+    dir_path %>%
+        list.files(pattern = "[.]shp$", full.names = TRUE) %>%
+        ensurer::ensure_that(length(.) > 0,
+                             err_desc = "No shapefiles found") %>%
+        tibble::enframe(name = NULL) %>%
+        dplyr::rename(file_path = value) %>%
+        dplyr::mutate(file_name = tools::file_path_sans_ext(basename(file_path))) %>%
+        tidyr::separate(col = file_name, into = c("mission", "level", "tile",
                                                   NA, "img_date")) %>%
         return()
 }
@@ -485,10 +485,10 @@ get_sample_shps <- function(dir_path) {
 #' @title Merge PRODES tiles.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Merge PRODES tiles into a single object.
-#'                                                                                                                                                    
-#' @param scene     A tibble of Landsat scenes to merge. It must have path and 
+#'
+#' @param scene     A tibble of Landsat scenes to merge. It must have path and
 #' row columns.
-#' @param prodes_tb A tibble. One row for each PRODES tile. It must have path 
+#' @param prodes_tb A tibble. One row for each PRODES tile. It must have path
 #' path, and prodes (sf object) columns.
 #' @param srs       A coordinate reference system.
 #' @return          A sf object.
@@ -496,11 +496,11 @@ merge_prodes_scenes <- function(scene, prodes_tb, srs = NULL){
     prodes <- prodes_proj <- NULL
     res <- scene %>%
         dplyr::left_join(prodes_tb, by = c("path", "row")) %>%
-        {if (is.null(srs)) 
+        {if (is.null(srs))
             dplyr::mutate(., prodes_proj = prodes)
-         else 
-            dplyr::mutate(., prodes_proj = purrr::map(.$prodes, 
-                                                   sf::st_transform, 
+         else
+            dplyr::mutate(., prodes_proj = purrr::map(.$prodes,
+                                                   sf::st_transform,
                                                    crs = srs))
         }
     return(do.call(rbind, dplyr::pull(res, prodes_proj)))
@@ -519,12 +519,12 @@ merge_prodes_scenes <- function(scene, prodes_tb, srs = NULL){
 #
 multiplot <- function(..., plotlist = NULL, file, cols = 1, layout = NULL) {
     library(grid)
-    
+
     # Make a list from the ... arguments and plotlist
     plots <- c(list(...), plotlist)
-    
+
     numPlots = length(plots)
-    
+
     # If layout is NULL, then use 'cols' to determine layout
     if (is.null(layout)) {
         # Make the panel
@@ -533,19 +533,19 @@ multiplot <- function(..., plotlist = NULL, file, cols = 1, layout = NULL) {
         layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
                          ncol = cols, nrow = ceiling(numPlots/cols))
     }
-    
+
     if (numPlots == 1) {
         print(plots[[1]])
     } else {
         # Set up the page
         grid.newpage()
         pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
-        
+
         # Make each plot, in the correct location
         for (i in 1:numPlots) {
             # Get the i,j matrix positions of the regions that contain this subplot
             matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
-            
+
             print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
                                             layout.pos.col = matchidx$col))
         }
@@ -557,40 +557,40 @@ multiplot <- function(..., plotlist = NULL, file, cols = 1, layout = NULL) {
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
 #' @description Format the plots of pixels' class per image.
 #'
-#' @param .data A tibble with images' tiles, dates, labels, number of pixels per 
-#'              label, and cloud detector algorithm (tile, img_date, label, 
+#' @param .data A tibble with images' tiles, dates, labels, number of pixels per
+#'              label, and cloud detector algorithm (tile, img_date, label,
 #'              total, detector).
 #' @return      A plot object.
-plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE, 
+plot_image_pixels <- function(.data, title, legend = FALSE, xlabel = FALSE,
                               ylabel = FALSE, only_legend = FALSE){
     detector <- img_date <- tile <- total <- NULL
-    res <- .data %>% 
-        ggplot2::ggplot() + 
-        ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date, 
-                                                 y = total/1000000, 
-                                                 fill = Label), 
-                          position = "dodge", 
+    res <- .data %>%
+        ggplot2::ggplot() +
+        ggplot2::geom_bar(mapping = ggplot2::aes(x = img_date,
+                                                 y = total/1000000,
+                                                 fill = Label),
+                          position = "dodge",
                           stat = "identity") +
         ggplot2::facet_wrap(dplyr::vars(tile, detector), ncol = 1) +
-        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, 
-                                                           hjust = 0, 
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90,
+                                                           hjust = 0,
                                                            size = 10),
                        axis.text.y = ggplot2::element_text(size = 10),
                        axis.title.y = ggplot2::element_text(size = 14),
                        plot.margin = ggplot2::margin(1, 1, 1, 1)) +
         ggplot2::xlab("Image date.") +
         #ggplot2::scale_x_date(labels = scales::date_format("%Y-%m-%d")) +
-        ggplot2::ylab("Number of pixels (millions).") 
-    if (only_legend) 
+        ggplot2::ylab("Number of pixels (millions).")
+    if (only_legend)
         return(ggpubr::as_ggplot(ggpubr::get_legend(res)))
     if (!ylabel) {
-        res <- res + ggplot2::theme(axis.title.y = element_blank(), 
+        res <- res + ggplot2::theme(axis.title.y = element_blank(),
                                     axis.text.y  = element_blank(),
                                     axis.ticks.y = element_blank())
     }
     if (!xlabel)
         res <- res + ggplot2::theme(axis.title.x = element_blank())
-    if (!legend) 
+    if (!legend)
         res <- res + ggplot2::theme(legend.position = "none")
     return(res)
 }
@@ -606,15 +606,15 @@ read_samples <- function(in_path) {
     empty_geom <- NULL
     in_path %>%
         sf::read_sf(options = "ENCODING=latin1") %>%
-        ensurer::ensure_that(ncol(.) == 3, 
-                             err_desc = sprintf("Invalid number of columns in %s", 
+        ensurer::ensure_that(ncol(.) == 3,
+                             err_desc = sprintf("Invalid number of columns in %s",
                                                 in_path)) %>%
         dplyr::rename(FID = 1, label = 2) %>%
         .recode_samples(coded_var = label) %>%
-        dplyr::filter(!is.na(label)) %>% 
-        dplyr::mutate(empty_geom = st_is_empty(.)) %>% 
-        dplyr::filter(empty_geom == FALSE) %>% 
-        dplyr::select(-empty_geom) %>% 
+        dplyr::filter(!is.na(label)) %>%
+        dplyr::mutate(empty_geom = sf::st_is_empty(.)) %>%
+        dplyr::filter(empty_geom == FALSE) %>%
+        dplyr::select(-empty_geom) %>%
         return()
 }
 
@@ -630,14 +630,14 @@ recode_fmask4 <- function(coded_vec){
     # https://github.com/gersl/fmask
     # https://drive.google.com/drive/folders/1SXBnEBDJ1Kbv7IQ9qIgqloYHZfdP6O1O
     coded_vec %>%
-        dplyr::recode(`0`   = "clear",       # "clear land pixel", 
+        dplyr::recode(`0`   = "clear",       # "clear land pixel",
                       `1`   = "clear",       # "clear water pixel",
                       `2`   = "shadow",      # "cloud shadow",
                       `3`   = "clear",       # "snow",
                       `4`   = "cloud",       # "cloud",
                       `255` = NA_character_, # "no observation")) %>%
                       .default = NA_character_,
-                      .missing = NA_character_) %>%  
+                      .missing = NA_character_) %>%
         return()
 }
 
@@ -666,11 +666,11 @@ recode_maja <- function(coded_vec){
         .test_mask <- function(true_value, value) {
             return(any(as.logical(intToBits(value) & intToBits(true_value))))
         }
-        
+
         # MAJA's Native Sentinel-2 format
         # https://labo.obs-mip.fr/multitemp/sentinel-2/majas-native-sentinel-2-format/
         bit <- true_value <- NULL
-        
+
         mask_tb <- tibble::tribble(~bit, ~description,
                                    0L,    "all clouds except the thinnest and all shadows",
                                    1L,    "all clouds (except the thinnest)",
@@ -681,9 +681,9 @@ recode_maja <- function(coded_vec){
                                    6L,    "thinnest clouds",
                                    7L,    "high clouds detected by 1.38 µm") %>%
             dplyr::mutate(true_value = as.integer(2^bit))
-        
+
         mask_tb %>%
-            dplyr::mutate(result = purrr::map_lgl(true_value, .test_mask, 
+            dplyr::mutate(result = purrr::map_lgl(true_value, .test_mask,
                                                   value = value)) %>%
             dplyr::select(-true_value) %>%
             return()
@@ -696,7 +696,7 @@ recode_maja <- function(coded_vec){
     #' @return        A tibble.
     .map_maja <- function(mask_tb) {
         result <- NULL
-        # bit                 0     1       2     3      4      5      6      7 
+        # bit                 0     1       2     3      4      5      6      7
         cirrus_pattern <- c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE)
         cloud_pattern  <- c(FALSE, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE)
         shadow_pattern <- c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE)
@@ -729,10 +729,10 @@ recode_maja <- function(coded_vec){
 #' @return          A character vector.
 recode_s2cloudless <- function(coded_vec){
     coded_vec %>%
-        dplyr::recode(`0` = "clear", 
+        dplyr::recode(`0` = "clear",
                       `1` = "cloud",
                       .default = NA_character_,
-                      .missing = NA_character_) %>%  
+                      .missing = NA_character_) %>%
         return()
 }
 
@@ -744,10 +744,10 @@ recode_s2cloudless <- function(coded_vec){
 #' @param coded_vec An integer vector. .
 #' @return          A character vector.
 recode_sen2cor <- function(coded_vec){
-    # BAETENS, Louis; DESJARDINS, Camille; HAGOLLE, Olivier. Validation of 
-    # Copernicus Sentinel-2 Cloud Masks Obtained from MAJA, Sen2Cor, and FMask 
-    # Processors Using Reference Cloud Masks Generated with a Supervised Active 
-    # Learning Procedure. Remote Sensing, v. 11, n. 4, p. 433, 2019. Disponível 
+    # BAETENS, Louis; DESJARDINS, Camille; HAGOLLE, Olivier. Validation of
+    # Copernicus Sentinel-2 Cloud Masks Obtained from MAJA, Sen2Cor, and FMask
+    # Processors Using Reference Cloud Masks Generated with a Supervised Active
+    # Learning Procedure. Remote Sensing, v. 11, n. 4, p. 433, 2019. Disponível
     # em: <http://www.mdpi.com/2072-4292/11/4/433>.
     coded_vec %>%
         dplyr::recode(`0`  = NA_character_, # "no data",
@@ -763,7 +763,7 @@ recode_sen2cor <- function(coded_vec){
                       `10` = "cirrus",      # "thin cirrus",
                       `11` = "clear",       # "snow"
                       .default = NA_character_,
-                      .missing = NA_character_) %>%  
+                      .missing = NA_character_) %>%
         return()
 }
 
@@ -778,7 +778,7 @@ recode_sen2cor <- function(coded_vec){
 recode_sf_prodes <- function(samples_sf, coded_var) {
     coded_var <- rlang::enquo(coded_var)
     samples_sf %>%
-        dplyr::mutate(prodes = dplyr::recode(!!coded_var, 
+        dplyr::mutate(prodes = dplyr::recode(!!coded_var,
                                              "d2007"         = "deforestation",
                                              "d2008"         = "deforestation",
                                              "d2009"         = "deforestation",
@@ -929,8 +929,8 @@ table_to_latex <- function(obj, out_file, caption_msg) {
 .recode_int_lgl <- function(data_tb, coded_var){
     coded_var <- rlang::enquo(coded_var)
     data_tb %>%
-        dplyr::mutate(!!coded_var := dplyr::recode(!!coded_var, 
-                                                   `0` = FALSE, 
+        dplyr::mutate(!!coded_var := dplyr::recode(!!coded_var,
+                                                   `0` = FALSE,
                                                    .default = TRUE,
                                                    .missing = NA)) %>%
         return()
@@ -939,7 +939,7 @@ table_to_latex <- function(obj, out_file, caption_msg) {
 
 #' @title Recode the labels given by experts.
 #' @author Alber Sanchez, \email{alber.ipia@@inpe.br}
-#' @description The experts give different labels with accents and typos. This 
+#' @description The experts give different labels with accents and typos. This
 #' function cleans and merges them.
 #'
 #' @param samples_sf A sf object.
@@ -949,19 +949,19 @@ table_to_latex <- function(obj, out_file, caption_msg) {
     coded_var <- rlang::enquo(coded_var)
     samples_sf %>%
         {
-            # labels used by experts, including typos. 
+            # labels used by experts, including typos.
             # NOTE: It MUST match the recoding values!
-            label_vector <- c("cirrus", "Cirrus", "claro", "clean", "clear", 
-                              "cloud", "Cloud", "fora", "Land", "nao nuvem",  
-                              "nao_nuvem", "não nuvem", "nuvem", "nï¿½o nuvem", 
-                              "nÃ£o nuvem",  "Nuvem", "other",  "others", "out", 
-                              "sem nuvem", "shadow", "Shadow", "shadow_new", 
-                              "sombra", "sombra_nuvem", "vloud") %>% 
+            label_vector <- c("cirrus", "Cirrus", "claro", "clean", "clear",
+                              "cloud", "Cloud", "fora", "Land", "nao nuvem",
+                              "nao_nuvem", "não nuvem", "nuvem", "nï¿½o nuvem",
+                              "nÃ£o nuvem",  "Nuvem", "other",  "others", "out",
+                              "sem nuvem", "shadow", "Shadow", "shadow_new",
+                              "sombra", "sombra_nuvem", "vloud") %>%
                 sort()
-            user_vector <- sort(unique(dplyr::pull(samples_sf, !!coded_var))) 
+            user_vector <- sort(unique(dplyr::pull(samples_sf, !!coded_var)))
             # Report any missing label in the data provided by the experts.
             if (any(!(user_vector %in% label_vector)))
-                stop(sprintf("Missing labels found: %s \n",  
+                stop(sprintf("Missing labels found: %s \n",
                              user_vector[!(user_vector %in% label_vector)]))
             rm(label_vector, user_vector)
             invisible(.)
@@ -995,7 +995,7 @@ table_to_latex <- function(obj, out_file, caption_msg) {
                                                "vloud"        = "cloud",
                                                .default       = "missing",
                                                .missing       = NA_character_)) %>%
-        ensurer::ensure_that("missing" %in% unique(dplyr::pull(., !!coded_var)) == FALSE, 
+        ensurer::ensure_that("missing" %in% unique(dplyr::pull(., !!coded_var)) == FALSE,
                              err_desc = "Unknown expert label!") %>%
         return()
 }
