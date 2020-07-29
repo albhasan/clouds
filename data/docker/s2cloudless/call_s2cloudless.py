@@ -65,7 +65,7 @@ def create_mask(band_array, path):
     # shape (1, y_pixels, x_pixels, n_bands)
     # s2cloudless requires binary map
     arr4d = np.expand_dims(stacked / 10000, 0)
-    cloud_detector = S2PixelCloudDetector(threshold=0.7, average_over=4,
+    cloud_detector = S2PixelCloudDetector(threshold=0.4, average_over=4,
                                           dilation_size=2)
     cloud_prob_map = cloud_detector.get_cloud_probability_maps(np.array(arr4d))
     cloud_masks = cloud_detector.get_cloud_masks(np.array(arr4d))
