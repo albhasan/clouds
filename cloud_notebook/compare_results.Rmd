@@ -7,6 +7,8 @@ editor_options:
 
 ```{r setup}
 
+stop("DEPRECATED: User ../R/compare_results.R")
+
 suppressPackageStartupMessages(require(caret))
 suppressPackageStartupMessages(require(dplyr))
 suppressPackageStartupMessages(require(raster))
@@ -17,13 +19,12 @@ suppressPackageStartupMessages(require(xtable))
 
 base_path <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds"
 
-source(file.path(base_path, "scripts", "util.R"))
+source(file.path(base_path, "R", "util.R"))
 
-# Shapefiles with the extent of the images.
-landsat_scenes <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/wrs2_asc_desc.dbf"
-sentinel_tiles <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/sentinel_2_index_shapefile.shp"
-stopifnot(all(vapply(c(landsat_scenes, sentinel_tiles), file.exists, 
-                     logical(1))))
+## Shapefiles with the extent of the images.
+#landsat_scenes <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/wrs2_asc_desc.dbf"
+#sentinel_tiles <- "/home/alber/Documents/data/experiments/prodes_reproduction/papers/clouds/data/masks/image_tiles/sentinel_2_index_shapefile.shp"
+#stopifnot(all(vapply(c(landsat_scenes, sentinel_tiles), file.exists, logical(1))))
 
 ```
 
@@ -35,6 +36,7 @@ stopifnot(all(vapply(c(landsat_scenes, sentinel_tiles), file.exists,
 
 baseline <- dir_name <- file_path <- img_date <- level <- processing <- NULL
 
+# Table of Fmask4 & s2cloudless masks
 fm4_s2cloud_tb <- base_path %>%
     file.path("data", "fmask4_s2cloudless") %>%
     list.dirs() %>%
@@ -51,10 +53,8 @@ fm4_s2cloud_tb <- base_path %>%
                                                pattern = "._s2cloudless_mask[.]tif$")) %>%
     dplyr::select(-file_path, -baseline, -processing, -level) %>%
     ensurer::ensure_that(nrow(.) > 0,err_desc = "No images found")
-fm4_s2cloud_tb %>%
-    dplyr::filter(is.na(fmask4) | is.na(s2cloudless)) %>%
-    print(n = Inf)
 
+# Table of sen2cor masks.
 sen2cor_tb <- base_path %>%
     file.path("data", "sen2cor") %>%
     list.dirs() %>%
@@ -69,11 +69,8 @@ sen2cor_tb <- base_path %>%
                                           pattern = "(._SCL[.]tif$|._SCL_20m[.]jp2$)")) %>%
     dplyr::select(-file_path, -baseline, -processing) %>%
     ensurer::ensure_that(nrow(.) > 0,err_desc = "No images found")
-sen2cor_tb %>%
-    filter(is.na(sen2cor)) %>%
-    print(n = Inf)
 
-    
+# Table of MAJA masks.    
 maja_tb <- base_path %>%
     file.path("data", "maja") %>%
     list.dirs() %>%
@@ -87,20 +84,12 @@ maja_tb <- base_path %>%
     dplyr::mutate(maja = purrr::map_chr(file_path, find_files, 
                                           pattern = "._CLM_R1[.]tif$")) %>%
     dplyr::select(-file_path, -baseline, -processing) %>%
-    ensurer::ensure_that(nrow(.) > 0,err_desc = "No images found")    
-maja_tb %>%
-    dplyr::filter(is.na(maja)) %>%
-    print(n = Inf)
+    ensurer::ensure_that(nrow(.) > 0,err_desc = "No images found")
 
-
-#---- Join MAJA & SEN2COR ----
+# Join MAJA to SEN2COR tables.
 s2core_maja_tb <- maja_tb %>%
     dplyr::full_join(sen2cor_tb, by = c("mission", "level", "img_date", "tile", 
                                         "orbit"))
-s2core_maja_tb %>%
-    dplyr::filter(is.na(sen2cor) | is.na(maja)) %>%
-    print(n = Inf)
-
 
 #---- Join FAMSK4 & S2 CLOUDLESS to MAJA & SEN2COR ----
 mission <- orbit <- tile <- fmask4 <- maja <- s2cloudless <- sen2cor <- NULL
@@ -109,14 +98,33 @@ fm4_s2cloud_maja_s2cor_tb <- fm4_s2cloud_tb %>%
                      by = c("mission", "img_date", "tile", "orbit")) %>%
     dplyr::select(mission, orbit ,tile, img_date, fmask4, maja, sen2cor, 
                   s2cloudless) %>%
-    dplyr::arrange(mission, tile, img_date)
+    dplyr::arrange(mission, tile, img_date) %>% 
+    # Report missing masks
+    (function(.data){
+        test <- .data %>% 
+            dplyr::filter(is.na(fmask4) | is.na(sen2cor) | is.na(maja) | is.na(s2cloudless))
+        if (nrow(test) > 0) {
+            warning("Found unmatched masks!")
+            print(test, n = Inf)
+            stop()
+        }
+        invisible(.data)
+    }) %>% 
+    # Report duplicates
+    (function(.data){
+        test <- .data %>% 
+            dplyr::group_by(mission, tile, img_date) %>% 
+            dplyr::summarize(n = n()) %>%
+            dplyr::filter(n > 1)
+        if (nrow(test) > 0) {
+            warning("Some images are duplicated!") 
+            print(test, n = Inf)
+            stop()
+        }
+        invisible(.data)
+    })
 
-#---- Spot duplicates ---
-fm4_s2cloud_maja_s2cor_tb %>% 
-    dplyr::group_by(mission, tile, img_date) %>% 
-    dplyr::summarize(n = n()) %>%
-    dplyr::filter(n > 1) %>%
-    ensurer::ensure_that(nrow(.) == 0, err_desc = "Some images are duplicated!")
+
 
 # Original number of images versus number of images with results for all clouds algothms
 cloud_imgs <- fm4_s2cloud_maja_s2cor_tb %>% 
