@@ -1,8 +1,19 @@
+#!/usr/bin/env Rscript
 # Compare the performance of the cloud masks.
+
+#---- Parameters ----
+
+args = commandArgs(trailingOnly=TRUE)
+if (length(args) != 1) {
+    stop("This script expects one parameter: A path to a directory with s2cloudless masks.")
+}
+print("Saving s2cloudless results to: ")
+print(paste0(basename(args[[1]]), ".csv"))
+
+#---- ----
 
 library(caret)
 library(dplyr)
-
 source("util.R")
 
 #---- Util ----
@@ -28,7 +39,7 @@ find_masks <- function(base_dir, mask_pattern){
 # Join and filter the two classified point samples provided by experts
 join_samples <- function(sf_1, sf_2) {
     sf_1 %>%
-        sf::st_join(y = sf_2, join = st_is_within_distance, dist = 1) %>%
+        sf::st_join(y = sf_2, join = sf::st_is_within_distance, dist = 1) %>%
         dplyr::filter(label.x == label.y) %>%
         dplyr::select(FID = FID.x, label = label.x) %>%
         return()
@@ -40,15 +51,16 @@ join_samples <- function(sf_1, sf_2) {
 fm4_tb <- file.path("..", "data", "fmask4_s2cloudless") %>%
     find_masks(mask_pattern = "._Fmask4[.]tif$") %>%
     dplyr::rename(fmask4 = "mask_file")
-s2cloud_tb <- file.path("..", "data", "fmask4_s2cloudless") %>%
-    find_masks(mask_pattern = "._s2cloudless_mask[.]tif$") %>%
-    dplyr::rename(s2cloudless = "mask_file")
 sen2cor_tb <- file.path("..", "data", "sen2cor") %>%
     find_masks(mask_pattern = "(._SCL[.]tif$|._SCL_20m[.]jp2$)") %>%
     dplyr::rename(sen2cor = "mask_file")
 maja_tb <- file.path("..", "data", "maja") %>%
     find_masks(mask_pattern = "._CLM_R1[.]tif$") %>%
     dplyr::rename(maja = "mask_file")
+#s2cloud_tb <- file.path("..", "data", "fmask4_s2cloudless") %>%
+s2cloud_tb <- args[1] %>%
+    find_masks(mask_pattern = "._s2cloudless_mask[.]tif$") %>%
+    dplyr::rename(s2cloudless = "mask_file")
 
 # Join tables.
 join_col_names <- c("mission", "img_date", "tile", "orbit")
@@ -170,5 +182,5 @@ data_tb <- cloud_experts %>%
 print("Total accuracy.")
 data_tb %>%
     format_conmat() %>%
-    print(n = Inf)
-
+    (function(x){print(x, n = Inf); invisible(x)}) %>%
+    readr::write_csv(path = paste0(basename(args[[1]]), ".csv"))
