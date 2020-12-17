@@ -1,20 +1,18 @@
-#!/usr/bin/env Rscript
 # Compare the performance of the cloud masks.
+
 
 #---- Parameters ----
 
-args = commandArgs(trailingOnly=TRUE)
-if (length(args) != 1) {
-    stop("This script expects one parameter: A path to a directory with s2cloudless masks.")
-}
-print("Saving s2cloudless results to: ")
-print(paste0(basename(args[[1]]), ".csv"))
+base_dir <- "/home/alber.ipia/Documents/paper/clouds"
 
-#---- ----
+
+#---- Prolog ----
 
 library(caret)
 library(dplyr)
-source("util.R")
+library(raster)
+
+source(file.path(base_dir, "R", "/util.R"))
 
 #---- Util ----
 
@@ -48,17 +46,16 @@ join_samples <- function(sf_1, sf_2) {
 #---- Script ----
 
 # Build tables of masks.
-fm4_tb <- file.path("..", "data", "fmask4_s2cloudless") %>%
+fm4_tb <- file.path(base_dir, "data", "fmask4_s2cloudless") %>%
     find_masks(mask_pattern = "._Fmask4[.]tif$") %>%
     dplyr::rename(fmask4 = "mask_file")
-sen2cor_tb <- file.path("..", "data", "sen2cor") %>%
+sen2cor_tb <- file.path(base_dir, "data", "sen2cor") %>%
     find_masks(mask_pattern = "(._SCL[.]tif$|._SCL_20m[.]jp2$)") %>%
     dplyr::rename(sen2cor = "mask_file")
-maja_tb <- file.path("..", "data", "maja") %>%
+maja_tb <- file.path(base_dir, "data", "maja") %>%
     find_masks(mask_pattern = "._CLM_R1[.]tif$") %>%
     dplyr::rename(maja = "mask_file")
-#s2cloud_tb <- file.path("..", "data", "fmask4_s2cloudless") %>%
-s2cloud_tb <- args[1] %>%
+s2cloud_tb <- file.path(base_dir, "data", "fmask4_s2cloudless") %>%
     find_masks(mask_pattern = "._s2cloudless_mask[.]tif$") %>%
     dplyr::rename(s2cloudless = "mask_file")
 
@@ -79,13 +76,13 @@ cloud_mask_tb <- fm4_s2cloud_maja_s2cor_tb %>%
     dplyr::select(-c(mission, orbit, fmask4, maja, sen2cor, s2cloudless))
 
 # Second classification made by experts.
-second_classification <- file.path("..", "data", "samples",
+second_classification <- file.path(base_dir, "data", "samples",
                                    "point_second_classification") %>%
     get_sample_shps() %>%
     dplyr::rename(file_path_2 = file_path)
 
 # Read the sample point classified by experts.
-cloud_experts <- file.path("..", "data", "samples", "point") %>%
+cloud_experts <- file.path(base_dir, "data", "samples", "point") %>%
     get_sample_shps() %>%
     dplyr::filter((mission == "S2A" & tile == "T19LFK" & img_date %in% c("20161004T144732", "20170102T144722", "20180507T144731", "20181103T144731")) |
                   (mission == "S2A" & tile == "T20NPH" & img_date %in% c("20160901T143752", "20161110T143752", "20170218T143751", "20170718T143751")) |
@@ -183,4 +180,8 @@ print("Total accuracy.")
 data_tb %>%
     format_conmat() %>%
     (function(x){print(x, n = Inf); invisible(x)}) %>%
-    readr::write_csv(path = paste0(basename(args[[1]]), ".csv"))
+    readr::write_csv(file = file.path(base_dir, "results", "results_response.csv"))
+
+data_tb %>%
+    saveRDS(file = file.path(base_dir, "results", "data_response.rds"))
+

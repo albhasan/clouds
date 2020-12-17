@@ -696,19 +696,35 @@ recode_maja <- function(coded_vec){
     #' @return        A tibble.
     .map_maja <- function(mask_tb) {
         result <- NULL
-        # bit                 0     1       2     3      4      5      6      7
-        cirrus_pattern <- c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE)
-        cloud_pattern  <- c(FALSE, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE)
-        shadow_pattern <- c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE)
+        # bit PAPER           0     1       2     3      4      5      6      7
+        # cirrus_pattern <-  c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE)
+        # cloud_pattern  <-  c(FALSE, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE)
+        # shadow_pattern <-  c(FALSE, FALSE, TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE)
+        #
+        # bit RESPONSE       0     1       2      3      4      5      6      7
+        cirrus_pattern <-  c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE)
+        cirrus_mask    <-  c(TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE)
+        cloud_pattern  <-  c(TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)
+        cloud_mask     <-  c(TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)
+        shadow_pattern <-  c(TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)
+        shadow_mask    <-  c(TRUE,  TRUE,  FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)
         maja_res <- mask_tb %>%
             dplyr::pull(result)
-        if (any(maja_res & cirrus_pattern))
+        #---------------------
+        # (maja_res <-  .parse_maja_mask(7)$result)
+        # (maja_res <-  .parse_maja_mask(131)$result)
+        # (maja_res <-  .parse_maja_mask(135)$result)
+        # (maja_res <-  .parse_maja_mask(143)$result)
+        #---------------------
+        if (all((maja_res & cirrus_mask) == cirrus_pattern))
             return("cirrus")
-        if (any(maja_res & cloud_pattern))
+        if (all((maja_res & cloud_mask)  == cloud_pattern))
             return("cloud")
-        if (any(maja_res & shadow_pattern))
+        if (all((maja_res & shadow_mask) == shadow_pattern))
             return("shadow")
-        return("clear")
+        if (all(!maja_res))
+            return("clear")
+        return("other")
     }
     maja_recoded <- maja_results <- recoded_vec <- value <- NULL
     coded_vec %>%
