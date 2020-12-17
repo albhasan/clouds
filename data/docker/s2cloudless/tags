@@ -1,0 +1,14 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+args	call_s2cloudless.py	/^    args = parser.parse_args()$/;"	v
+band_array	call_s2cloudless.py	/^        band_array = create_bandarray(img)$/;"	v
+create_bandarray	call_s2cloudless.py	/^def create_bandarray(path):$/;"	f
+create_mask	call_s2cloudless.py	/^def create_mask(band_array, path):$/;"	f
+get_img_dir	call_s2cloudless.py	/^def get_img_dir(path):$/;"	f
+help	call_s2cloudless.py	/^                        help="directory with Sentinel-2 images")$/;"	v
+parser	call_s2cloudless.py	/^    parser = argparse.ArgumentParser()$/;"	v
+subdirs	call_s2cloudless.py	/^def subdirs(path):$/;"	f
