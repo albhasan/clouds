@@ -2,7 +2,7 @@
 
 # Credentials for downloading Sentinel images
 
-export MY_USER="alber.ipia"
+export MY_USER=""
 export MY_PWD=""
 export dhusget="/home/alber-d006/bin/dhusget.sh"
 export out="/home/alber-d006/Documents/github/clouds/data/copernicus-sentinel-2-scenes"
